@@ -1,0 +1,12 @@
+# Database Configuration
+spring.datasource.url=jdbc:postgresql://your-database-host:5432/your-database-name?tcpKeepAlive=true
+spring.datasource.username=your-username
+spring.datasource.password=your-password
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA/Hibernate Configuration
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto=none
+
+# Flyway Configuration
+spring.flyway.enabled=false
