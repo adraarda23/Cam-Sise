@@ -221,8 +221,8 @@ src/
 - ✅ Proje iskeleti ve build ayarları
 - ✅ Supabase bağlantısı ve Flyway migration yapısı
 - ✅ Ubiquitous language sözlüğü (dokümantasyon)
-- ⬜ Inventory bounded context domain modeli
-- ⬜ Logistics bounded context domain modeli
+- 🔄 Inventory bounded context domain modeli
+- 🔄 Logistics bounded context domain modeli
 - ✅ JWT auth iskeleti (login endpoint, token üretimi)
 - ✅ 3 rollü erişim filtresi (ADMIN, COMPANY_STAFF, CUSTOMER)
 - ⬜ Sentetik veri üreticisi (1 depo, 5 cam üreticisi, 250 dolumcu, geçmiş veri)
