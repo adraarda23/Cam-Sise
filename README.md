@@ -63,10 +63,21 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 ```
 
 **Dış yapı:** Modular Monolith — her bounded context kendi modülünde
-**İç yapı:** Layered Architecture — her modülde Controller → Service → Repository → Domain
+**İç yapı:** DDD-influenced Layered Architecture with Hexagonal principles
+**Paket organizasyonu:**
+- `api/` — REST Controllers (Input Adapters)
+- `application/` — Use Cases, Services, Event Handlers
+- `domain/` — Aggregates, Entities, Value Objects, Domain Events
+- `repository/` — Data Access (Output Adapters)
+
 **Tasarım prensibi:** Domain-Driven Design (DDD)
 **Event Yönetimi:** Domain Events + Event Sourcing (Audit Logging)
 **Multi-Tenancy:** Pool Operator (Tenant) bazlı izolasyon
+
+**Pragmatik seçimler:**
+- Domain entities JPA annotations içeriyor (tam Hexagonal Architecture'dan sapma)
+- Repository interfaces doğrudan `JpaRepository` extend ediyor
+- Trade-off: Basitlik ve Spring Boot best practices vs Pure Hexagonal Architecture
 
 ---
 
@@ -289,15 +300,33 @@ src/
 │   │   │       └── AsyncConfig.java
 │   │   │
 │   │   ├── core/
+│   │   │   ├── api/              # REST Controllers
+│   │   │   │   ├── PoolOperatorController.java
+│   │   │   │   └── FillerController.java
+│   │   │   ├── application/      # Use Cases & Services
+│   │   │   │   ├── service/
+│   │   │   │   │   ├── PoolOperatorService.java
+│   │   │   │   │   └── FillerService.java
+│   │   │   │   └── event/
+│   │   │   │       └── CoreEventHandler.java
 │   │   │   ├── domain/
 │   │   │   │   ├── PoolOperator.java
 │   │   │   │   ├── Filler.java
 │   │   │   │   └── event/         # Core events
-│   │   │   ├── repository/
-│   │   │   ├── service/
-│   │   │   └── controller/
+│   │   │   └── repository/
+│   │   │       ├── PoolOperatorRepository.java
+│   │   │       └── FillerRepository.java
 │   │   │
 │   │   ├── inventory/
+│   │   │   ├── api/
+│   │   │   │   ├── FillerStockController.java
+│   │   │   │   └── LossRecordController.java
+│   │   │   ├── application/
+│   │   │   │   ├── service/
+│   │   │   │   │   ├── FillerStockService.java
+│   │   │   │   │   └── LossRecordService.java
+│   │   │   │   └── event/
+│   │   │   │       └── InventoryEventHandler.java
 │   │   │   ├── domain/
 │   │   │   │   ├── FillerStock.java
 │   │   │   │   ├── LossRecord.java
@@ -307,11 +336,26 @@ src/
 │   │   │   │   │   ├── StockMovement.java
 │   │   │   │   │   └── Period.java
 │   │   │   │   └── event/         # Inventory events
-│   │   │   ├── repository/
-│   │   │   ├── service/
-│   │   │   └── controller/
+│   │   │   └── repository/
+│   │   │       ├── FillerStockRepository.java
+│   │   │       └── LossRecordRepository.java
 │   │   │
 │   │   ├── logistics/
+│   │   │   ├── api/
+│   │   │   │   ├── VehicleTypeController.java
+│   │   │   │   ├── DepotController.java
+│   │   │   │   ├── VehicleController.java
+│   │   │   │   ├── CollectionRequestController.java
+│   │   │   │   └── CollectionPlanController.java
+│   │   │   ├── application/
+│   │   │   │   ├── service/
+│   │   │   │   │   ├── VehicleTypeService.java
+│   │   │   │   │   ├── DepotService.java
+│   │   │   │   │   ├── VehicleService.java
+│   │   │   │   │   ├── CollectionRequestService.java
+│   │   │   │   │   └── CollectionPlanService.java
+│   │   │   │   └── event/
+│   │   │   │       └── LogisticsEventHandler.java
 │   │   │   ├── domain/
 │   │   │   │   ├── VehicleType.java
 │   │   │   │   ├── Depot.java
@@ -324,18 +368,27 @@ src/
 │   │   │   │   │   ├── DriverInfo.java
 │   │   │   │   │   └── [enums]
 │   │   │   │   └── event/         # Logistics events
-│   │   │   ├── repository/
-│   │   │   ├── service/
-│   │   │   └── controller/
+│   │   │   └── repository/
+│   │   │       ├── VehicleTypeRepository.java
+│   │   │       ├── DepotRepository.java
+│   │   │       ├── VehicleRepository.java
+│   │   │       ├── CollectionRequestRepository.java
+│   │   │       └── CollectionPlanRepository.java
 │   │   │
 │   │   └── auth/
+│   │       ├── api/
+│   │       │   └── TestEventController.java
+│   │       ├── application/
+│   │       │   ├── service/
+│   │       │   │   └── UserService.java
+│   │       │   └── event/
+│   │       │       └── UserEventHandler.java
 │   │       ├── domain/
 │   │       │   ├── User.java
 │   │       │   ├── Role.java
 │   │       │   └── event/         # Auth events
 │   │       ├── repository/
-│   │       ├── service/
-│   │       ├── controller/
+│   │       │   └── UserRepository.java
 │   │       ├── config/
 │   │       │   ├── SecurityConfig.java
 │   │       │   └── DataInitializer.java
@@ -367,7 +420,6 @@ src/
 - ✅ Proje iskeleti ve build ayarları
 - ✅ Supabase bağlantısı ve Flyway migration yapısı
 - ✅ Ubiquitous language sözlüğü (dokümantasyon)
-<<<<<<< HEAD
 - ✅ **DDD Base Infrastructure** (AggregateRoot, Entity, ValueObject, DomainEvent)
 - ✅ **Domain Event Altyapısı** (Publisher, Store, Listener, Async)
 - ✅ **Core Module Domain Model** (PoolOperator, Filler + 6 event)
@@ -380,42 +432,38 @@ src/
 - ✅ JWT auth iskeleti (login endpoint, token üretimi)
 - ✅ 3 rollü erişim filtresi (ADMIN, COMPANY_STAFF, CUSTOMER)
 - ✅ **Detaylı Teknik Dokümantasyon** (docs/PROJECT_DOCUMENTATION.md)
-=======
-- 🔄 Inventory bounded context domain modeli
-- 🔄 Logistics bounded context domain modeli
-- ✅ JWT auth iskeleti (login endpoint, token üretimi)
-- ✅ 3 rollü erişim filtresi (ADMIN, COMPANY_STAFF, CUSTOMER)
->>>>>>> origin/master
-- ⬜ Sentetik veri üreticisi (1 depo, 5 cam üreticisi, 250 dolumcu, geçmiş veri)
-- ⬜ Smoke test — `GET /actuator/health` → UP
+- ✅ **Validation & Exception Handling** (GlobalExceptionHandler, custom exceptions, Bean Validation)
+- ✅ **Unit Tests** (JUnit 5 + Mockito + AssertJ - Domain, Service, 25 tests passing)
+- ✅ **Sentetik veri üreticisi** (DataSeeder: 1 PoolOperator, 1 Depot, 250 Filler, 500 Stock, 3 VehicleType, 5 Vehicle)
+- ✅ Smoke test — `GET /actuator/health` → UP
 
 ### Hafta 2 — Envanter Yönetimi Modülü
 
-- ⬜ Repository katmanı (FillerStockRepository, LossRecordRepository)
-- ⬜ Service katmanı (FillerStockService, LossRecordService)
-- ⬜ Hareket kayıt servisi (inflow / collection)
-- ⬜ Dolumcu bazında anlık stok hesaplama servisi
-- ⬜ Moving average tabanlı zaiyat tahmin servisi
-- ⬜ Event Handler (StockThresholdExceeded → CollectionRequest oluştur)
-- ⬜ Event Handler (CollectionCompleted → FillerStock güncelle)
-- ⬜ Raporlama REST endpoint'leri
-- ⬜ Rol bazlı veri filtresi (CUSTOMER sadece kendi verisini görür)
-- ⬜ Birim ve entegrasyon testleri
+- ✅ Repository katmanı (FillerStockRepository, LossRecordRepository)
+- ✅ Service katmanı (FillerStockService, LossRecordService)
+- ✅ Hareket kayıt servisi (inflow / collection)
+- ✅ Dolumcu bazında anlık stok hesaplama servisi
+- ✅ Moving average tabanlı zaiyat tahmin servisi
+- ✅ Event Handler (StockThresholdExceeded → CollectionRequest oluştur)
+- ✅ Event Handler (CollectionCompleted → FillerStock güncelle)
+- ✅ Raporlama REST endpoint'leri
+- ✅ Rol bazlı veri filtresi (CUSTOMER sadece kendi verisini görür)
+- ✅ Birim ve entegrasyon testleri
 - ⬜ Swagger dokümantasyonu — inventory endpoint'leri
 
 ### Hafta 3 — Rota Optimizasyonu ve Unified Collection Pool
 
-- ⬜ Repository katmanı (VehicleTypeRepository, DepotRepository, VehicleRepository, CollectionRequestRepository, CollectionPlanRepository)
-- ⬜ Service katmanı (tüm logistics servisler)
+- ✅ Repository katmanı (VehicleTypeRepository, DepotRepository, VehicleRepository, CollectionRequestRepository, CollectionPlanRepository)
+- ✅ Service katmanı (tüm logistics servisler)
 - ⬜ Rota optimizasyon kütüphanesi entegrasyonu (Jsprit veya OR-Tools)
-- ⬜ Haversine mesafe matrisi (GeoCoordinates.distanceTo() kullanarak)
+- ✅ Haversine mesafe matrisi (GeoCoordinates.distanceTo() kullanarak)
 - ⬜ CVRP problem formülasyonu (multi-depot destekli)
-- ⬜ Durum geçiş kontrolü (RequestStatus, PlanStatus, VehicleStatus)
-- ⬜ Otomatik talep üretimi (StockThresholdExceeded event handler)
-- ⬜ Manuel talep endpoint'i (CUSTOMER rolü)
-- ⬜ Talep onay/red endpoint'leri (COMPANY_STAFF rolü)
-- ⬜ Toplama planı oluşturma ve kalıcı saklama
-- ⬜ Event Handler (FillerRegistered → FillerStock oluştur)
+- ✅ Durum geçiş kontrolü (RequestStatus, PlanStatus, VehicleStatus)
+- ✅ Otomatik talep üretimi (StockThresholdExceeded event handler)
+- ✅ Manuel talep endpoint'i (CUSTOMER rolü)
+- ✅ Talep onay/red endpoint'leri (COMPANY_STAFF rolü)
+- ✅ Toplama planı oluşturma ve kalıcı saklama
+- ✅ Event Handler (FillerRegistered → FillerStock oluştur)
 - ⬜ Uçtan uca test senaryosu
 - ⬜ Swagger dokümantasyonu — logistics endpoint'leri
 

@@ -1,6 +1,10 @@
 package ardaaydinkilinc.Cam_Sise.shared.domain.base;
 
 import ardaaydinkilinc.Cam_Sise.shared.domain.event.DomainEvent;
+import ardaaydinkilinc.Cam_Sise.shared.infrastructure.persistence.DomainEventPublishingEntityListener;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.Transient;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,8 +15,11 @@ import java.util.List;
  * Aggregate roots are the entry point to the aggregate and are responsible for maintaining invariants.
  * They collect domain events that will be published after the aggregate is persisted.
  */
+@MappedSuperclass
+@EntityListeners(DomainEventPublishingEntityListener.class)
 public abstract class AggregateRoot<ID> extends Entity<ID> {
 
+    @Transient
     private final List<DomainEvent> domainEvents = new ArrayList<>();
 
     protected AggregateRoot() {
