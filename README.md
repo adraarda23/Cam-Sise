@@ -367,6 +367,7 @@ src/
 - ✅ Proje iskeleti ve build ayarları
 - ✅ Supabase bağlantısı ve Flyway migration yapısı
 - ✅ Ubiquitous language sözlüğü (dokümantasyon)
+<<<<<<< HEAD
 - ✅ **DDD Base Infrastructure** (AggregateRoot, Entity, ValueObject, DomainEvent)
 - ✅ **Domain Event Altyapısı** (Publisher, Store, Listener, Async)
 - ✅ **Core Module Domain Model** (PoolOperator, Filler + 6 event)
@@ -379,6 +380,12 @@ src/
 - ✅ JWT auth iskeleti (login endpoint, token üretimi)
 - ✅ 3 rollü erişim filtresi (ADMIN, COMPANY_STAFF, CUSTOMER)
 - ✅ **Detaylı Teknik Dokümantasyon** (docs/PROJECT_DOCUMENTATION.md)
+=======
+- 🔄 Inventory bounded context domain modeli
+- 🔄 Logistics bounded context domain modeli
+- ✅ JWT auth iskeleti (login endpoint, token üretimi)
+- ✅ 3 rollü erişim filtresi (ADMIN, COMPANY_STAFF, CUSTOMER)
+>>>>>>> origin/master
 - ⬜ Sentetik veri üreticisi (1 depo, 5 cam üreticisi, 250 dolumcu, geçmiş veri)
 - ⬜ Smoke test — `GET /actuator/health` → UP
 
