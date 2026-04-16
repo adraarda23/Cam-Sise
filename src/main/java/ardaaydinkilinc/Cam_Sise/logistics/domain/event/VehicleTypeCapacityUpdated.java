@@ -1,0 +1,14 @@
+package ardaaydinkilinc.Cam_Sise.logistics.domain.event;
+
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.Capacity;
+import ardaaydinkilinc.Cam_Sise.shared.domain.event.DomainEvent;
+
+import java.time.LocalDateTime;
+
+public record VehicleTypeCapacityUpdated(
+        Long vehicleTypeId,
+        Long poolOperatorId,
+        Capacity newCapacity,
+        LocalDateTime occurredAt
+) implements DomainEvent {
+}

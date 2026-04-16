@@ -1,24 +1,26 @@
 package ardaaydinkilinc.Cam_Sise.auth.domain;
 
+import ardaaydinkilinc.Cam_Sise.auth.domain.event.UserRegistered;
+import ardaaydinkilinc.Cam_Sise.auth.domain.event.UserRoleChanged;
+import ardaaydinkilinc.Cam_Sise.shared.domain.base.AggregateRoot;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * User aggregate root
+ * Represents a system user with role-based access
+ */
 @Entity
 @Table(name = "users")
-@Data
-@Builder
+@Getter
 @NoArgsConstructor
-@AllArgsConstructor
-public class User {
+public class User extends AggregateRoot<Long> {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "pool_operator_id", nullable = false)
+    private Long poolOperatorId;
 
     @Column(unique = true, nullable = false)
     private String username;
@@ -40,7 +42,6 @@ public class User {
     @Column(name = "filler_id")
     private Long fillerId;
 
-    @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
 
@@ -50,9 +51,69 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    /**
+     * Factory method to register a new user
+     */
+    public static User register(
+            Long poolOperatorId,
+            String username,
+            String password,
+            String fullName,
+            Role role,
+            Long fillerId
+    ) {
+        User user = new User();
+        user.poolOperatorId = poolOperatorId;
+        user.username = username;
+        user.password = password;
+        user.fullName = fullName;
+        user.role = role;
+        user.fillerId = fillerId;
+        user.active = true;
+        user.createdAt = LocalDateTime.now();
+        user.updatedAt = LocalDateTime.now();
+
+        user.addDomainEvent(new UserRegistered(
+                poolOperatorId,
+                username,
+                role,
+                fillerId,
+                LocalDateTime.now()
+        ));
+
+        return user;
+    }
+
+    /**
+     * Change user role
+     */
+    public void changeRole(Role newRole) {
+        Role oldRole = this.role;
+        this.role = newRole;
+        this.updatedAt = LocalDateTime.now();
+
+        addDomainEvent(new UserRoleChanged(
+                this.id,
+                this.poolOperatorId,
+                oldRole,
+                newRole,
+                LocalDateTime.now()
+        ));
+    }
+
+    /**
+     * Update password
+     */
+    public void updatePassword(String newPassword) {
+        this.password = newPassword;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
         updatedAt = LocalDateTime.now();
     }
 

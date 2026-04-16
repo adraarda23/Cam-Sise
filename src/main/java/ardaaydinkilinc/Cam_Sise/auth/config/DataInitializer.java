@@ -31,46 +31,42 @@ public class DataInitializer implements CommandLineRunner {
     private void initializeUsers() {
         // ADMIN kullanıcısı
         if (!userRepository.existsByUsername("admin")) {
-            User admin = User.builder()
-                    .username("admin")
-                    .password(passwordEncoder.encode("admin123"))
-                    .fullName("Admin User")
-                    .role(Role.ADMIN)
-                    .active(true)
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
+            User admin = User.register(
+                    1L, // default pool operator ID
+                    "admin",
+                    passwordEncoder.encode("admin123"),
+                    "Admin User",
+                    Role.ADMIN,
+                    null
+            );
             userRepository.save(admin);
             log.info("✅ ADMIN kullanıcısı oluşturuldu: username=admin, password=admin123");
         }
 
         // COMPANY_STAFF kullanıcısı
         if (!userRepository.existsByUsername("staff")) {
-            User staff = User.builder()
-                    .username("staff")
-                    .password(passwordEncoder.encode("staff123"))
-                    .fullName("Company Staff")
-                    .role(Role.COMPANY_STAFF)
-                    .active(true)
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
+            User staff = User.register(
+                    1L, // default pool operator ID
+                    "staff",
+                    passwordEncoder.encode("staff123"),
+                    "Company Staff",
+                    Role.COMPANY_STAFF,
+                    null
+            );
             userRepository.save(staff);
             log.info("✅ COMPANY_STAFF kullanıcısı oluşturuldu: username=staff, password=staff123");
         }
 
         // CUSTOMER kullanıcısı
         if (!userRepository.existsByUsername("customer")) {
-            User customer = User.builder()
-                    .username("customer")
-                    .password(passwordEncoder.encode("customer123"))
-                    .fullName("Customer User")
-                    .role(Role.CUSTOMER)
-                    .fillerId(1L) // Test dolumcu ID'si
-                    .active(true)
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
+            User customer = User.register(
+                    1L, // default pool operator ID
+                    "customer",
+                    passwordEncoder.encode("customer123"),
+                    "Customer User",
+                    Role.CUSTOMER,
+                    1L // Test dolumcu ID'si
+            );
             userRepository.save(customer);
             log.info("✅ CUSTOMER kullanıcısı oluşturuldu: username=customer, password=customer123, fillerId=1");
         }
