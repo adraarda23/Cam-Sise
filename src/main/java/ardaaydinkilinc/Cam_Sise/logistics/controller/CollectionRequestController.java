@@ -25,14 +25,17 @@ public class CollectionRequestController {
     /**
      * Create a manual collection request (initiated by customer)
      */
-    @PostMapping
+    @PostMapping("/manual")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF', 'CUSTOMER')")
     public ResponseEntity<CollectionRequest> createManualRequest(@RequestBody CreateManualRequestRequest request) {
+        // Use null for requestingUserId if not provided (can be enhanced with @AuthenticationPrincipal later)
+        Long requestingUserId = request.requestingUserId != null ? request.requestingUserId : 1L;
+
         CollectionRequest collectionRequest = collectionRequestService.createManual(
                 request.fillerId,
                 request.assetType,
                 request.estimatedQuantity,
-                request.requestingUserId
+                requestingUserId
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(collectionRequest);
     }
