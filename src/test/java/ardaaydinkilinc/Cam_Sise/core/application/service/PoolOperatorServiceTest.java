@@ -1,4 +1,4 @@
-package ardaaydinkilinc.Cam_Sise.core.application.service;
+package ardaaydinkilinc.Cam_Sise.core.service;
 
 import ardaaydinkilinc.Cam_Sise.core.domain.PoolOperator;
 import ardaaydinkilinc.Cam_Sise.core.repository.PoolOperatorRepository;

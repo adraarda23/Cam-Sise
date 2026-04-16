@@ -63,21 +63,19 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 ```
 
 **Dış yapı:** Modular Monolith — her bounded context kendi modülünde
-**İç yapı:** DDD-influenced Layered Architecture with Hexagonal principles
-**Paket organizasyonu:**
-- `api/` — REST Controllers (Input Adapters)
-- `application/` — Use Cases, Services, Event Handlers
-- `domain/` — Aggregates, Entities, Value Objects, Domain Events
-- `repository/` — Data Access (Output Adapters)
+**İç yapı:** DDD-based Layered Architecture
+
+**Katman organizasyonu:**
+- `controller/` — REST Controllers (Presentation Layer)
+- `service/` — Application Services & Use Cases (Application Layer)
+- `domain/` — Aggregates, Entities, Value Objects, Domain Events (Domain Layer)
+- `repository/` — Data Access (Infrastructure Layer)
 
 **Tasarım prensibi:** Domain-Driven Design (DDD)
+- **Tactical Patterns:** Aggregate Root, Entity, Value Object, Domain Event, Repository
+- **Strategic Patterns:** Bounded Context, Ubiquitous Language, Modular structure
 **Event Yönetimi:** Domain Events + Event Sourcing (Audit Logging)
 **Multi-Tenancy:** Pool Operator (Tenant) bazlı izolasyon
-
-**Pragmatik seçimler:**
-- Domain entities JPA annotations içeriyor (tam Hexagonal Architecture'dan sapma)
-- Repository interfaces doğrudan `JpaRepository` extend ediyor
-- Trade-off: Basitlik ve Spring Boot best practices vs Pure Hexagonal Architecture
 
 ---
 
@@ -300,10 +298,10 @@ src/
 │   │   │       └── AsyncConfig.java
 │   │   │
 │   │   ├── core/
-│   │   │   ├── api/              # REST Controllers
+│   │   │   ├── controller/       # REST Controllers
 │   │   │   │   ├── PoolOperatorController.java
 │   │   │   │   └── FillerController.java
-│   │   │   ├── application/      # Use Cases & Services
+│   │   │   ├── service/          # Application Services
 │   │   │   │   ├── service/
 │   │   │   │   │   ├── PoolOperatorService.java
 │   │   │   │   │   └── FillerService.java
@@ -318,10 +316,10 @@ src/
 │   │   │       └── FillerRepository.java
 │   │   │
 │   │   ├── inventory/
-│   │   │   ├── api/
+│   │   │   ├── controller/
 │   │   │   │   ├── FillerStockController.java
 │   │   │   │   └── LossRecordController.java
-│   │   │   ├── application/
+│   │   │   ├── service/
 │   │   │   │   ├── service/
 │   │   │   │   │   ├── FillerStockService.java
 │   │   │   │   │   └── LossRecordService.java
@@ -341,13 +339,13 @@ src/
 │   │   │       └── LossRecordRepository.java
 │   │   │
 │   │   ├── logistics/
-│   │   │   ├── api/
+│   │   │   ├── controller/
 │   │   │   │   ├── VehicleTypeController.java
 │   │   │   │   ├── DepotController.java
 │   │   │   │   ├── VehicleController.java
 │   │   │   │   ├── CollectionRequestController.java
 │   │   │   │   └── CollectionPlanController.java
-│   │   │   ├── application/
+│   │   │   ├── service/
 │   │   │   │   ├── service/
 │   │   │   │   │   ├── VehicleTypeService.java
 │   │   │   │   │   ├── DepotService.java
@@ -376,9 +374,9 @@ src/
 │   │   │       └── CollectionPlanRepository.java
 │   │   │
 │   │   └── auth/
-│   │       ├── api/
+│   │       ├── controller/
 │   │       │   └── TestEventController.java
-│   │       ├── application/
+│   │       ├── service/
 │   │       │   ├── service/
 │   │       │   │   └── UserService.java
 │   │       │   └── event/
