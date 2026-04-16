@@ -32,29 +32,41 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 ## Mimari
 
 ```
-┌─────────────────────────────────────────────────┐
-│              Modular Monolith                   │
-│                                                 │
-│  ┌──────────────────┐  ┌─────────────────────┐  │
-│  │  Inventory       │  │  Logistics          │  │
-│  │  Module          │  │  Module             │  │
-│  │                  │  │                     │  │
-│  │  Controller      │  │  Controller         │  │
-│  │  Service         │  │  Service            │  │
-│  │  Repository      │  │  Repository         │  │
-│  │  Domain          │  │  Domain             │  │
-│  └──────────────────┘  └─────────────────────┘  │
-│          │                      │               │
-│          └──────────┬───────────┘               │
-│                     │ Domain Events             │
-└─────────────────────┼───────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                    Modular Monolith                           │
+│                                                               │
+│  ┌──────────┐  ┌───────────┐  ┌───────────┐  ┌─────────┐    │
+│  │   Core   │  │ Inventory │  │ Logistics │  │  Auth   │    │
+│  │  Module  │  │  Module   │  │  Module   │  │ Module  │    │
+│  │          │  │           │  │           │  │         │    │
+│  │PoolOp.   │  │FillerStock│  │VehicleType│  │  User   │    │
+│  │Filler    │  │LossRecord │  │  Depot    │  │         │    │
+│  │          │  │           │  │  Vehicle  │  │         │    │
+│  │          │  │           │  │Collection │  │         │    │
+│  │          │  │           │  │  Request  │  │         │    │
+│  │          │  │           │  │Collection │  │         │    │
+│  │          │  │           │  │   Plan    │  │         │    │
+│  └────┬─────┘  └─────┬─────┘  └─────┬─────┘  └────┬────┘    │
+│       │              │              │             │          │
+│       └──────────────┴──────────────┴─────────────┘          │
+│                      │                                       │
+│                Domain Events Bus                             │
+│                      │                                       │
+│            ┌─────────▼─────────┐                             │
+│            │  Event Sourcing   │                             │
+│            │  (Audit Logging)  │                             │
+│            └───────────────────┘                             │
+└───────────────────────────────────────────────────────────────┘
+                      │
                       ▼
-                 PostgreSQL
+              PostgreSQL (Supabase)
 ```
 
-**Dış yapı:** Modular Monolith — her bounded context kendi modülünde  
-**İç yapı:** Layered Architecture — her modülde Controller → Service → Repository → Domain  
+**Dış yapı:** Modular Monolith — her bounded context kendi modülünde
+**İç yapı:** Layered Architecture — her modülde Controller → Service → Repository → Domain
 **Tasarım prensibi:** Domain-Driven Design (DDD)
+**Event Yönetimi:** Domain Events + Event Sourcing (Audit Logging)
+**Multi-Tenancy:** Pool Operator (Tenant) bazlı izolasyon
 
 ---
 
@@ -62,16 +74,19 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 
 | Terim | Açıklama |
 |---|---|
-| **Pool Operator (Havuz Operatörü)** | Sistemin sahibi. Bursa/Gemlik merkezli, tek depo. |
-| **Depot (Depo)** | Gemlik'teki merkez tesis. Araçların çıkış ve dönüş noktası. |
+| **Pool Operator (Havuz Operatörü)** | Sistemin sahibi firma (Tenant). Multi-tenancy için kullanılır. |
+| **Depot (Depo)** | Depo/tesis. Araçların çıkış ve dönüş noktası. Bir operatörün birden fazla deposu olabilir. |
 | **Glass Manufacturer (Cam Üreticisi)** | Operatörden palet alır, camı dolumcuya sevk eder. Aracı. 5 adet. |
 | **Filler (Dolumcu)** | İçecek/gıda dolumu yapan fabrikalar (Coca-Cola, Pepsi vb.). 250 adet. |
 | **Asset** | Takibi yapılan palet veya separatör. |
+| **FillerStock** | Bir dolumcunun belirli bir asset tipi için stok durumu. |
 | **Inflow** | Bir dolumcuya ulaşan asset kaydı (başlangıç bakiyesi). |
 | **Loss Record (Zaiyat Kaydı)** | Dolumcudaki kayıp/hasar oranı. Girilmezse moving average ile tahmin edilir. |
 | **Collection Request (Toplama Talebi)** | Dolumcudan toplama isteği. Otomatik (eşik tetikli) veya Manuel (dolumcudan). |
 | **Collection Plan (Toplama Planı)** | CVRP optimizer çıktısı. Hangi aracın hangi sırayla hangi dolumcuları ziyaret ettiği. |
-| **Vehicle (Araç)** | Toplama için kullanılan araç. Kapasitesi ve bağlı olduğu depo tanımlı. |
+| **Vehicle (Araç)** | Toplama için kullanılan araç. Depoya bağlı, araç tipine sahip. |
+| **VehicleType (Araç Tipi)** | Araç tipi katalogu. Admin tarafından tanımlanır, kapasite bilgisi içerir. |
+| **Domain Event** | Aggregate'lerde gerçekleşen önemli olaylar. Modüller arası iletişim sağlar. |
 
 ---
 
@@ -84,6 +99,24 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 | `CUSTOMER` | Dolumcu firmanın kullanıcısı. Sadece kendi stoku ve taleplerini görür. Manuel talep açar. |
 
 Yetkilendirme: **JWT tabanlı**, rol odaklı, stateless.
+
+---
+
+## Dokümantasyon
+
+📖 **[Detaylı Teknik Dokümantasyon](docs/PROJECT_DOCUMENTATION.md)**
+
+Aggregate'ler, Value Object'ler, Domain Event'ler, API endpoint'leri ve daha fazlası için detaylı dokümantasyona bakınız.
+
+**İçerik:**
+- Domain Model (10 Aggregate Root detaylı açıklama)
+- Domain Events (35+ event ve modüller arası iletişim)
+- Value Objects (19 adet)
+- DDD Kavramları
+- Multi-Tenancy Mimarisi
+- Event Sourcing & Audit Logging
+- API Endpoint Referansı (gelecekte doldurulacak)
+- Veritabanı Şeması
 
 ---
 
@@ -161,22 +194,68 @@ http://localhost:8080/swagger-ui/index.html
 
 ## Modüller
 
+### Core Module
+Tenant (PoolOperator) ve müşteri (Filler) yönetimi.
+
+**Aggregate Roots:**
+- `PoolOperator` - Sistemin sahibi firma (tenant)
+- `Filler` - Dolumcu firma bilgileri
+
+**Sorumluluklar:**
+- Multi-tenancy yönetimi
+- Firma ve dolumcu CRUD işlemleri
+- Lokasyon ve iletişim bilgileri
+
+---
+
 ### Inventory Module
 Dolumculardaki asset bakiyelerinin takibi.
 
-- Asset inflow / geri toplama hareketleri
+**Aggregate Roots:**
+- `FillerStock` - Stok durumu ve hareketleri
+- `LossRecord` - Zaiyat/kayıp oranları
+
+**Sorumluluklar:**
+- Asset inflow / collection hareketleri
 - Dolumcu bazında anlık stok hesabı
 - Moving average tabanlı zaiyat tahmini
+- Eşik değeri kontrolü (→ otomatik toplama talebi)
 - Raporlama endpoint'leri
 - Rol bazlı veri filtresi
+
+---
 
 ### Logistics Module
 Geri toplama planlaması ve rota optimizasyonu.
 
-- Unified Collection Pool (otomatik + manuel talepler tek havuzda)
-- CVRP tabanlı rota optimizasyonu (tek depo: Gemlik)
+**Aggregate Roots:**
+- `VehicleType` - Araç tipi katalogu
+- `Depot` - Depo yönetimi
+- `Vehicle` - Araç kaydı ve durum takibi
+- `CollectionRequest` - Toplama talepleri
+- `CollectionPlan` - Rota planları
+
+**Sorumluluklar:**
+- Unified Collection Pool (otomatik + manuel talepler)
+- CVRP tabanlı rota optimizasyonu
 - Haversine mesafe matrisi
-- Toplama planı oluşturma ve kalıcı saklama
+- Araç ve depo yönetimi
+- Talep onay/red akışı
+- Toplama planı oluşturma ve takibi
+
+---
+
+### Auth Module
+Kimlik doğrulama ve yetkilendirme.
+
+**Aggregate Roots:**
+- `User` - Kullanıcı bilgileri ve rol yönetimi
+
+**Sorumluluklar:**
+- JWT tabanlı authentication
+- Rol bazlı authorization (ADMIN, COMPANY_STAFF, CUSTOMER)
+- Kullanıcı CRUD işlemleri
+- Tenant bazlı veri izolasyonu
 
 ---
 
@@ -185,28 +264,95 @@ Geri toplama planlaması ve rota optimizasyonu.
 ```
 src/
 ├── main/
-│   ├── java/
-│   │   └── com.example.havuz/
-│   │       ├── inventory/
-│   │       │   ├── controller/
-│   │       │   ├── service/
-│   │       │   ├── repository/
-│   │       │   └── domain/
-│   │       ├── logistics/
-│   │       │   ├── controller/
-│   │       │   ├── service/
-│   │       │   ├── repository/
-│   │       │   └── domain/
-│   │       ├── auth/
-│   │       │   ├── controller/
-│   │       │   ├── service/
-│   │       │   └── domain/
-│   │       └── shared/
-│   │           └── domain/   ← paylaşılan value object'ler
+│   ├── java/ardaaydinkilinc/Cam_Sise/
+│   │   ├── shared/
+│   │   │   ├── domain/
+│   │   │   │   ├── base/          # DDD base sınıfları
+│   │   │   │   │   ├── AggregateRoot.java
+│   │   │   │   │   ├── Entity.java
+│   │   │   │   │   └── ValueObject.java
+│   │   │   │   ├── vo/            # Paylaşılan Value Object'ler
+│   │   │   │   │   ├── Address.java
+│   │   │   │   │   ├── GeoCoordinates.java
+│   │   │   │   │   ├── Distance.java
+│   │   │   │   │   ├── Duration.java
+│   │   │   │   │   ├── ContactInfo.java
+│   │   │   │   │   ├── TaxId.java
+│   │   │   │   │   └── Money.java
+│   │   │   │   └── event/         # Event altyapısı
+│   │   │   │       ├── DomainEvent.java
+│   │   │   │       ├── DomainEventPublisher.java
+│   │   │   │       ├── DomainEventStore.java
+│   │   │   │       ├── DomainEventStoreRepository.java
+│   │   │   │       └── DomainEventListener.java
+│   │   │   └── config/
+│   │   │       └── AsyncConfig.java
+│   │   │
+│   │   ├── core/
+│   │   │   ├── domain/
+│   │   │   │   ├── PoolOperator.java
+│   │   │   │   ├── Filler.java
+│   │   │   │   └── event/         # Core events
+│   │   │   ├── repository/
+│   │   │   ├── service/
+│   │   │   └── controller/
+│   │   │
+│   │   ├── inventory/
+│   │   │   ├── domain/
+│   │   │   │   ├── FillerStock.java
+│   │   │   │   ├── LossRecord.java
+│   │   │   │   ├── vo/            # Inventory Value Objects
+│   │   │   │   │   ├── AssetType.java
+│   │   │   │   │   ├── LossRate.java
+│   │   │   │   │   ├── StockMovement.java
+│   │   │   │   │   └── Period.java
+│   │   │   │   └── event/         # Inventory events
+│   │   │   ├── repository/
+│   │   │   ├── service/
+│   │   │   └── controller/
+│   │   │
+│   │   ├── logistics/
+│   │   │   ├── domain/
+│   │   │   │   ├── VehicleType.java
+│   │   │   │   ├── Depot.java
+│   │   │   │   ├── Vehicle.java
+│   │   │   │   ├── CollectionRequest.java
+│   │   │   │   ├── CollectionPlan.java
+│   │   │   │   ├── vo/            # Logistics Value Objects
+│   │   │   │   │   ├── Capacity.java
+│   │   │   │   │   ├── RouteStop.java
+│   │   │   │   │   ├── DriverInfo.java
+│   │   │   │   │   └── [enums]
+│   │   │   │   └── event/         # Logistics events
+│   │   │   ├── repository/
+│   │   │   ├── service/
+│   │   │   └── controller/
+│   │   │
+│   │   └── auth/
+│   │       ├── domain/
+│   │       │   ├── User.java
+│   │       │   ├── Role.java
+│   │       │   └── event/         # Auth events
+│   │       ├── repository/
+│   │       ├── service/
+│   │       ├── controller/
+│   │       ├── config/
+│   │       │   ├── SecurityConfig.java
+│   │       │   └── DataInitializer.java
+│   │       ├── filter/
+│   │       │   └── JwtAuthenticationFilter.java
+│   │       └── dto/
+│   │
 │   └── resources/
-│       ├── db/
-│       │   └── migration/    ← Flyway SQL dosyaları (V1__, V2__...)
+│       ├── db/migration/
+│       │   ├── V1__initial_schema.sql
+│       │   ├── V2__auth_tables.sql
+│       │   └── V3__create_domain_model_tables.sql
 │       └── application.properties
+│
+├── docs/
+│   └── PROJECT_DOCUMENTATION.md    # Detaylı teknik dokümantasyon
+│
 └── test/
 ```
 
@@ -221,19 +367,30 @@ src/
 - ✅ Proje iskeleti ve build ayarları
 - ✅ Supabase bağlantısı ve Flyway migration yapısı
 - ✅ Ubiquitous language sözlüğü (dokümantasyon)
-- ⬜ Inventory bounded context domain modeli
-- ⬜ Logistics bounded context domain modeli
-- ⬜ JWT auth iskeleti (login endpoint, token üretimi)
-- ⬜ 3 rollü erişim filtresi (ADMIN, COMPANY_STAFF, CUSTOMER)
+- ✅ **DDD Base Infrastructure** (AggregateRoot, Entity, ValueObject, DomainEvent)
+- ✅ **Domain Event Altyapısı** (Publisher, Store, Listener, Async)
+- ✅ **Core Module Domain Model** (PoolOperator, Filler + 6 event)
+- ✅ **Inventory Module Domain Model** (FillerStock, LossRecord + 5 event + 4 VO)
+- ✅ **Logistics Module Domain Model** (VehicleType, Depot, Vehicle, CollectionRequest, CollectionPlan + 17 event + 8 VO)
+- ✅ **Auth Module** (User aggregate güncellemesi + 2 event)
+- ✅ **Shared Value Objects** (7 adet: Address, GeoCoordinates, Distance, Duration, ContactInfo, TaxId, Money)
+- ✅ **Multi-Tenancy** (Pool Operator tenant yapısı)
+- ✅ **Flyway Migration V3** (Tüm domain model tabloları)
+- ✅ JWT auth iskeleti (login endpoint, token üretimi)
+- ✅ 3 rollü erişim filtresi (ADMIN, COMPANY_STAFF, CUSTOMER)
+- ✅ **Detaylı Teknik Dokümantasyon** (docs/PROJECT_DOCUMENTATION.md)
 - ⬜ Sentetik veri üreticisi (1 depo, 5 cam üreticisi, 250 dolumcu, geçmiş veri)
 - ⬜ Smoke test — `GET /actuator/health` → UP
 
 ### Hafta 2 — Envanter Yönetimi Modülü
 
-- ⬜ Asset, Inflow, LossRecord entity + repository katmanı
-- ⬜ Hareket kayıt servisi (inflow / geri toplama)
+- ⬜ Repository katmanı (FillerStockRepository, LossRecordRepository)
+- ⬜ Service katmanı (FillerStockService, LossRecordService)
+- ⬜ Hareket kayıt servisi (inflow / collection)
 - ⬜ Dolumcu bazında anlık stok hesaplama servisi
 - ⬜ Moving average tabanlı zaiyat tahmin servisi
+- ⬜ Event Handler (StockThresholdExceeded → CollectionRequest oluştur)
+- ⬜ Event Handler (CollectionCompleted → FillerStock güncelle)
 - ⬜ Raporlama REST endpoint'leri
 - ⬜ Rol bazlı veri filtresi (CUSTOMER sadece kendi verisini görür)
 - ⬜ Birim ve entegrasyon testleri
@@ -241,15 +398,19 @@ src/
 
 ### Hafta 3 — Rota Optimizasyonu ve Unified Collection Pool
 
-- ⬜ Rota optimizasyon kütüphanesi entegrasyonu
-- ⬜ Haversine mesafe matrisi
-- ⬜ CVRP problem formülasyonu (tek depo: Gemlik)
-- ⬜ CollectionRequest domain modeli + durum makinesi (PENDING → APPROVED → SCHEDULED → COMPLETED)
-- ⬜ Otomatik talep üretimi (envanter eşik dinleyicisi)
+- ⬜ Repository katmanı (VehicleTypeRepository, DepotRepository, VehicleRepository, CollectionRequestRepository, CollectionPlanRepository)
+- ⬜ Service katmanı (tüm logistics servisler)
+- ⬜ Rota optimizasyon kütüphanesi entegrasyonu (Jsprit veya OR-Tools)
+- ⬜ Haversine mesafe matrisi (GeoCoordinates.distanceTo() kullanarak)
+- ⬜ CVRP problem formülasyonu (multi-depot destekli)
+- ⬜ Durum geçiş kontrolü (RequestStatus, PlanStatus, VehicleStatus)
+- ⬜ Otomatik talep üretimi (StockThresholdExceeded event handler)
 - ⬜ Manuel talep endpoint'i (CUSTOMER rolü)
-- ⬜ Talep onay/red servisi (COMPANY_STAFF rolü)
+- ⬜ Talep onay/red endpoint'leri (COMPANY_STAFF rolü)
 - ⬜ Toplama planı oluşturma ve kalıcı saklama
+- ⬜ Event Handler (FillerRegistered → FillerStock oluştur)
 - ⬜ Uçtan uca test senaryosu
+- ⬜ Swagger dokümantasyonu — logistics endpoint'leri
 
 ### Hafta 4 — Frontend Panel ve Tez Yazımı
 
