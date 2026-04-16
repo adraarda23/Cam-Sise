@@ -3,6 +3,11 @@ package ardaaydinkilinc.Cam_Sise.inventory.controller;
 import ardaaydinkilinc.Cam_Sise.inventory.service.FillerStockService;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,13 +22,17 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/inventory/stocks")
 @RequiredArgsConstructor
+@Tag(name = "Inventory - Stock Management", description = "Dolumcu stok yönetimi API'leri")
+@SecurityRequirement(name = "bearerAuth")
 public class FillerStockController {
 
     private final FillerStockService fillerStockService;
 
-    /**
-     * Record asset inflow (when filler receives assets from manufacturer)
-     */
+    @Operation(
+            summary = "Asset girişi kaydet",
+            description = "Dolumcuya gelen palet/separatör girişini kaydet (cam üreticisinden)"
+    )
+    @ApiResponse(responseCode = "200", description = "Giriş başarıyla kaydedildi")
     @PostMapping("/inflow")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF', 'CUSTOMER')")
     public ResponseEntity<FillerStock> recordInflow(@RequestBody RecordInflowRequest request) {
