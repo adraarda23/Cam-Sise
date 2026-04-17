@@ -127,6 +127,13 @@ Aggregate'ler, Value Object'ler, Domain Event'ler, API endpoint'leri ve daha faz
 - API Endpoint Referansı (gelecekte doldurulacak)
 - Veritabanı Şeması
 
+📖 **[CVRP Rota Optimizasyonu Dokümantasyonu](docs/)**
+
+Çoklu araç rota optimizasyonu için detaylı dokümantasyon:
+- **[CVRP Implementation Summary](docs/CVRP_IMPLEMENTATION_SUMMARY.md)** - Clarke-Wright algoritması detayları, test sonuçları
+- **[Multi-Stop Route Example](docs/MULTI_STOP_ROUTE_EXAMPLE.md)** - Adım adım algoritma çalışması, görsel örnekler
+- **[Input/Output Examples](docs/INPUT_OUTPUT_EXAMPLE.md)** - API kullanımı, request/response formatları
+
 ---
 
 ## Teknoloji Stack
@@ -138,7 +145,8 @@ Aggregate'ler, Value Object'ler, Domain Event'ler, API endpoint'leri ve daha faz
 | Veritabanı | PostgreSQL (Supabase — cloud, shared) |
 | Migration | Flyway |
 | Güvenlik | Spring Security + JWT (jjwt) |
-| Rota Optimizasyonu | Jsprit veya OR-Tools (Hafta 3'te eklenecek) |
+| Rota Optimizasyonu | Clarke-Wright Savings Algorithm (Custom Implementation) |
+| | Multi-vehicle CVRP with constraints (800km, 10h) |
 | API Dokümantasyonu | SpringDoc OpenAPI (Swagger UI) |
 | Build | Maven |
 | Frontend | TBD |
@@ -252,6 +260,18 @@ Geri toplama planlaması ve rota optimizasyonu.
 - Talep onay/red akışı
 - Toplama planı oluşturma ve takibi
 
+**CVRP Route Optimization:**
+- **Algorithm:** Clarke-Wright Savings Algorithm (custom implementation)
+- **Features:**
+  - Multi-vehicle routing with realistic constraints
+  - Geographic clustering (prevents unrealistic routes like Adana→İzmir→Urfa)
+  - Constraint enforcement: 800km max distance, 10 hours max duration, 30 min service time per stop
+  - 2-opt local search optimization
+  - Automatic route rejection for infeasible routes
+  - Unassigned request tracking
+- **API Endpoint:** `POST /api/logistics/optimize/multi-vehicle`
+- **Documentation:** See `docs/CVRP_*.md` files
+
 ---
 
 ### Auth Module
@@ -351,7 +371,11 @@ src/
 │   │   │   │   │   ├── DepotService.java
 │   │   │   │   │   ├── VehicleService.java
 │   │   │   │   │   ├── CollectionRequestService.java
-│   │   │   │   │   └── CollectionPlanService.java
+│   │   │   │   │   ├── CollectionPlanService.java
+│   │   │   │   │   ├── RouteOptimizationService.java
+│   │   │   │   │   ├── CVRPOptimizer.java
+│   │   │   │   │   ├── RouteConstraints.java
+│   │   │   │   │   └── DistanceCalculator.java
 │   │   │   │   └── event/
 │   │   │   │       └── LogisticsEventHandler.java
 │   │   │   ├── domain/
@@ -402,7 +426,11 @@ src/
 │       └── application.properties
 │
 ├── docs/
-│   └── PROJECT_DOCUMENTATION.md    # Detaylı teknik dokümantasyon
+│   ├── PROJECT_DOCUMENTATION.md          # Detaylı teknik dokümantasyon
+│   ├── CVRP_IMPLEMENTATION_SUMMARY.md    # Clarke-Wright algoritması özeti
+│   ├── MULTI_STOP_ROUTE_EXAMPLE.md       # Adım adım rota örnekleri
+│   ├── INPUT_OUTPUT_EXAMPLE.md           # API input/output formatları
+│   └── KALAN_GOREVLER.md                 # TODO list ve roadmap
 │
 └── test/
 ```
@@ -453,16 +481,24 @@ src/
 
 - ✅ Repository katmanı (VehicleTypeRepository, DepotRepository, VehicleRepository, CollectionRequestRepository, CollectionPlanRepository)
 - ✅ Service katmanı (tüm logistics servisler)
-- ⬜ Rota optimizasyon kütüphanesi entegrasyonu (Jsprit veya OR-Tools)
-- ✅ Haversine mesafe matrisi (GeoCoordinates.distanceTo() kullanarak)
-- ⬜ CVRP problem formülasyonu (multi-depot destekli)
+- ✅ **Clarke-Wright Savings Algorithm implementasyonu** (custom implementation, no external dependencies)
+- ✅ **Multi-vehicle CVRP optimizer** (CVRPOptimizer.java)
+- ✅ **Route constraints configuration** (RouteConstraints.java: 800km, 10h, 30min service time)
+- ✅ **2-opt local search optimization** for route improvement
+- ✅ **RouteOptimizationService** - orchestrates CVRP with domain logic
+- ✅ **RouteOptimizationController** - `POST /api/logistics/optimize/multi-vehicle` endpoint
+- ✅ Haversine mesafe matrisi (DistanceCalculator.java)
+- ✅ **Geographic clustering** (prevents unrealistic routes like Adana→İzmir→Urfa)
+- ✅ **Constraint enforcement** (automatic route rejection for infeasible routes)
+- ✅ **Comprehensive CVRP documentation** (3 detailed markdown files in docs/)
 - ✅ Durum geçiş kontrolü (RequestStatus, PlanStatus, VehicleStatus)
 - ✅ Otomatik talep üretimi (StockThresholdExceeded event handler)
 - ✅ Manuel talep endpoint'i (CUSTOMER rolü)
 - ✅ Talep onay/red endpoint'leri (COMPANY_STAFF rolü)
 - ✅ Toplama planı oluşturma ve kalıcı saklama
 - ✅ Event Handler (FillerRegistered → FillerStock oluştur)
-- ⬜ Uçtan uca test senaryosu
+- ✅ Test senaryoları (test_multi_vehicle_cvrp.sh, demo_multi_stop_route.sh)
+- ⬜ Integration tests (multi-vehicle optimization end-to-end test)
 - ⬜ Swagger dokümantasyonu — logistics endpoint'leri
 
 ### Hafta 4 — Frontend Panel ve Tez Yazımı

@@ -3,6 +3,7 @@ package ardaaydinkilinc.Cam_Sise.logistics.controller;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.service.RouteOptimizationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -76,15 +77,25 @@ public class RouteOptimizationController {
 
     // ===== DTOs =====
 
+    @Schema(description = "Rota optimizasyonu request DTO")
     public record OptimizeRouteRequest(
+            @Schema(description = "Depo ID", example = "1", required = true)
             Long depotId,
+
+            @Schema(description = "Planlanan toplama tarihi (varsayılan: yarın)", example = "2026-04-20")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             LocalDate plannedDate
     ) {}
 
+    @Schema(description = "Özel talep listesi için rota optimizasyonu request DTO")
     public record CustomOptimizeRequest(
+            @Schema(description = "Depo ID", example = "1", required = true)
             Long depotId,
+
+            @Schema(description = "Optimize edilecek collection request ID listesi", example = "[1, 2, 3, 4, 5]", required = true)
             List<Long> requestIds,
+
+            @Schema(description = "Planlanan toplama tarihi (varsayılan: yarın)", example = "2026-04-21")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             LocalDate plannedDate
     ) {}
@@ -134,18 +145,34 @@ public class RouteOptimizationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @Schema(description = "Çoklu araç rota optimizasyonu request DTO")
     public record MultiVehicleOptimizeRequest(
+            @Schema(description = "Depo ID", example = "1", required = true)
             Long depotId,
+
+            @Schema(description = "Planlanan toplama tarihi (varsayılan: yarın)", example = "2026-04-20")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             LocalDate plannedDate,
+
+            @Schema(description = "Maksimum kullanılacak araç sayısı (varsayılan: 10)", example = "5")
             Integer maxVehicles
     ) {}
 
+    @Schema(description = "Çoklu araç rota optimizasyonu response DTO")
     public record MultiVehicleOptimizeResponse(
+            @Schema(description = "Oluşturulan collection plan listesi (her biri bir araç rotası)")
             List<CollectionPlan> plans,
+
+            @Schema(description = "Kullanılan araç sayısı", example = "3")
             int vehiclesUsed,
+
+            @Schema(description = "Toplam mesafe (km)", example = "789.68")
             double totalDistanceKm,
+
+            @Schema(description = "Toplam palet sayısı", example = "78")
             int totalPallets,
+
+            @Schema(description = "Toplam ayırıcı sayısı", example = "27")
             int totalSeparators
     ) {}
 }

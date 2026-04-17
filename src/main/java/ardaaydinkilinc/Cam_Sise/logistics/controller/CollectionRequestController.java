@@ -4,6 +4,12 @@ import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionRequestService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +24,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/logistics/collection-requests")
 @RequiredArgsConstructor
+@Tag(name = "Logistics - Collection Requests", description = "Toplama talepleri yönetimi API'leri")
+@SecurityRequirement(name = "bearerAuth")
 public class CollectionRequestController {
 
     private final CollectionRequestService collectionRequestService;
@@ -25,6 +33,12 @@ public class CollectionRequestController {
     /**
      * Create a manual collection request (initiated by customer)
      */
+    @Operation(
+            summary = "Manuel toplama talebi oluştur",
+            description = "Dolumcu tarafından manuel olarak toplama talebi oluşturur. CUSTOMER rolü kendi dolumcusu için talep oluşturabilir."
+    )
+    @ApiResponse(responseCode = "201", description = "Talep başarıyla oluşturuldu")
+    @ApiResponse(responseCode = "400", description = "Geçersiz request parametreleri")
     @PostMapping("/manual")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF', 'CUSTOMER')")
     public ResponseEntity<CollectionRequest> createManualRequest(@RequestBody CreateManualRequestRequest request) {
@@ -43,10 +57,12 @@ public class CollectionRequestController {
     /**
      * Approve a collection request
      */
+    @Operation(summary = "Toplama talebini onayla", description = "COMPANY_STAFF tarafından toplama talebini onaylar. Onaylanan talepler rota optimizasyonuna dahil edilir.")
+    @ApiResponse(responseCode = "200", description = "Talep başarıyla onaylandı")
     @PostMapping("/{requestId}/approve")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
     public ResponseEntity<CollectionRequest> approveRequest(
-            @PathVariable Long requestId,
+            @Parameter(description = "Collection request ID") @PathVariable Long requestId,
             @RequestBody ApproveRequestRequest request
     ) {
         CollectionRequest collectionRequest = collectionRequestService.approve(requestId, request.approvingUserId);
@@ -89,12 +105,14 @@ public class CollectionRequestController {
     /**
      * Get all collection requests (with optional filters)
      */
+    @Operation(summary = "Tüm toplama taleplerini listele", description = "Filtrelemelerle tüm toplama taleplerini listeler. COMPANY_STAFF tüm talepleri görebilir.")
+    @ApiResponse(responseCode = "200", description = "Talep listesi başarıyla döndürüldü")
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
     public ResponseEntity<List<CollectionRequest>> getAllRequests(
-            @RequestParam(required = false) Long fillerId,
-            @RequestParam(required = false) RequestStatus status,
-            @RequestParam(required = false) AssetType assetType
+            @Parameter(description = "Dolumcu ID'ye göre filtrele") @RequestParam(required = false) Long fillerId,
+            @Parameter(description = "Duruma göre filtrele (PENDING, APPROVED, REJECTED, etc.)") @RequestParam(required = false) RequestStatus status,
+            @Parameter(description = "Asset tipine göre filtrele (PALLET, SEPARATOR)") @RequestParam(required = false) AssetType assetType
     ) {
         List<CollectionRequest> requests;
         if (fillerId != null) {
@@ -124,18 +142,30 @@ public class CollectionRequestController {
 
     // ===== DTOs =====
 
+    @Schema(description = "Manuel toplama talebi oluşturma request DTO")
     public record CreateManualRequestRequest(
+            @Schema(description = "Dolumcu ID", example = "1", required = true)
             Long fillerId,
+
+            @Schema(description = "Asset tipi (PALLET veya SEPARATOR)", example = "PALLET", required = true)
             AssetType assetType,
+
+            @Schema(description = "Tahmini toplama miktarı", example = "50", required = true)
             Integer estimatedQuantity,
+
+            @Schema(description = "Talep oluşturan kullanıcı ID (opsiyonel)", example = "1")
             Long requestingUserId
     ) {}
 
+    @Schema(description = "Toplama talebi onaylama request DTO")
     public record ApproveRequestRequest(
+            @Schema(description = "Onaylayan kullanıcı ID", example = "1", required = true)
             Long approvingUserId
     ) {}
 
+    @Schema(description = "Toplama talebi reddetme request DTO")
     public record RejectRequestRequest(
+            @Schema(description = "Red sebebi", example = "Dolumcu stok bilgisi hatalı", required = true)
             String reason
     ) {}
 }
