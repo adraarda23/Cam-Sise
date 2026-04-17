@@ -164,4 +164,12 @@ public class FillerStockService {
     public List<FillerStock> getStocksByAssetType(AssetType assetType) {
         return fillerStockRepository.findByAssetType(assetType);
     }
+
+    /**
+     * Get all stocks in the system.
+     */
+    @Transactional(readOnly = true)
+    public List<FillerStock> getAllStocks() {
+        return fillerStockRepository.findAll();
+    }
 }

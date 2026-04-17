@@ -121,6 +121,21 @@ public class FillerStockController {
         return ResponseEntity.ok(stocks);
     }
 
+    /**
+     * Get all stocks in the system
+     */
+    @Operation(
+            summary = "Tüm stokları listele",
+            description = "Sistemdeki tüm dolumcu stok kayıtlarını listeler. ADMIN ve COMPANY_STAFF tarafından kullanılabilir."
+    )
+    @ApiResponse(responseCode = "200", description = "Stok listesi başarıyla döndürüldü")
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    public ResponseEntity<List<FillerStock>> getAllStocks() {
+        List<FillerStock> stocks = fillerStockService.getAllStocks();
+        return ResponseEntity.ok(stocks);
+    }
+
     // ===== DTOs =====
 
     public record RecordInflowRequest(
