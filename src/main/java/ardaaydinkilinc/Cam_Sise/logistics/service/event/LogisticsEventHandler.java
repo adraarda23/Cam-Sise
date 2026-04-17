@@ -1,12 +1,15 @@
 package ardaaydinkilinc.Cam_Sise.logistics.service.event;
 
 import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionRequestService;
+import ardaaydinkilinc.Cam_Sise.logistics.service.RouteOptimizationService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.event.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
 
 /**
  * Event handler for Logistics module domain events.
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Component;
 public class LogisticsEventHandler {
 
     private final CollectionRequestService collectionRequestService;
+    private final RouteOptimizationService routeOptimizationService;
 
     /**
      * Handle CollectionRequestApproved event
@@ -30,7 +34,10 @@ public class LogisticsEventHandler {
                 event.fillerId(),
                 event.approvedByUserId());
 
-        // TODO: Trigger CVRP optimization to create collection plan
+        // Note: Automatic route optimization is not triggered here
+        // Admin must manually trigger optimization via POST /api/logistics/optimize endpoint
+        // This allows batching multiple approved requests into a single optimized route
+
         // TODO: Notify filler about approval
         // TODO: Update dashboard/analytics
     }
