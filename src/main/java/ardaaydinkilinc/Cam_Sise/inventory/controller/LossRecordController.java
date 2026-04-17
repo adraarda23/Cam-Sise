@@ -4,6 +4,8 @@ import ardaaydinkilinc.Cam_Sise.inventory.service.LossRecordService;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.LossRecord;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.Period;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +22,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/inventory/loss-records")
 @RequiredArgsConstructor
+@Tag(name = "Inventory - Loss Records", description = "Zaiyat kayıtları yönetimi API'leri")
+@SecurityRequirement(name = "bearerAuth")
 public class LossRecordController {
 
     private final LossRecordService lossRecordService;

@@ -3,6 +3,12 @@ package ardaaydinkilinc.Cam_Sise.logistics.controller;
 import ardaaydinkilinc.Cam_Sise.logistics.service.VehicleService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.Vehicle;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +23,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/logistics/vehicles")
 @RequiredArgsConstructor
+@Tag(name = "Logistics - Vehicles", description = "Araç yönetimi API'leri")
+@SecurityRequirement(name = "bearerAuth")
 public class VehicleController {
 
     private final VehicleService vehicleService;
@@ -24,6 +32,12 @@ public class VehicleController {
     /**
      * Register a new vehicle
      */
+    @Operation(
+            summary = "Yeni araç kaydı",
+            description = "Sisteme yeni bir araç kaydeder. ADMIN ve COMPANY_STAFF tarafından kullanılabilir."
+    )
+    @ApiResponse(responseCode = "201", description = "Araç başarıyla kaydedildi")
+    @ApiResponse(responseCode = "400", description = "Geçersiz request parametreleri")
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
     public ResponseEntity<Vehicle> registerVehicle(@RequestBody RegisterVehicleRequest request) {
@@ -38,10 +52,16 @@ public class VehicleController {
     /**
      * Assign vehicle to collection route
      */
+    @Operation(
+            summary = "Aracı toplama rotasına ata",
+            description = "Bir aracı belirli bir toplama planına (rota) atar ve sürücü bilgilerini kaydeder."
+    )
+    @ApiResponse(responseCode = "200", description = "Araç başarıyla rotaya atandı")
+    @ApiResponse(responseCode = "404", description = "Araç veya plan bulunamadı")
     @PostMapping("/{vehicleId}/assign")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
     public ResponseEntity<Vehicle> assignToRoute(
-            @PathVariable Long vehicleId,
+            @Parameter(description = "Araç ID") @PathVariable Long vehicleId,
             @RequestBody AssignToRouteRequest request
     ) {
         Vehicle vehicle = vehicleService.assignToRoute(
@@ -57,9 +77,17 @@ public class VehicleController {
     /**
      * Vehicle departs from depot
      */
+    @Operation(
+            summary = "Araç depodan ayrıldı",
+            description = "Aracın depodan ayrıldığını (yola çıktığını) kaydeder."
+    )
+    @ApiResponse(responseCode = "200", description = "Araç durumu başarıyla güncellendi")
+    @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @PostMapping("/{vehicleId}/depart")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<Vehicle> departFromDepot(@PathVariable Long vehicleId) {
+    public ResponseEntity<Vehicle> departFromDepot(
+            @Parameter(description = "Araç ID") @PathVariable Long vehicleId
+    ) {
         Vehicle vehicle = vehicleService.departFromDepot(vehicleId);
         return ResponseEntity.ok(vehicle);
     }
@@ -67,9 +95,17 @@ public class VehicleController {
     /**
      * Vehicle returns to depot
      */
+    @Operation(
+            summary = "Araç depoya döndü",
+            description = "Aracın depoya geri döndüğünü kaydeder."
+    )
+    @ApiResponse(responseCode = "200", description = "Araç durumu başarıyla güncellendi")
+    @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @PostMapping("/{vehicleId}/return")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<Vehicle> returnToDepot(@PathVariable Long vehicleId) {
+    public ResponseEntity<Vehicle> returnToDepot(
+            @Parameter(description = "Araç ID") @PathVariable Long vehicleId
+    ) {
         Vehicle vehicle = vehicleService.returnToDepot(vehicleId);
         return ResponseEntity.ok(vehicle);
     }
@@ -77,10 +113,16 @@ public class VehicleController {
     /**
      * Change vehicle status
      */
+    @Operation(
+            summary = "Araç durumunu değiştir",
+            description = "Aracın durumunu manuel olarak günceller (AVAILABLE, IN_TRANSIT, MAINTENANCE, etc.)."
+    )
+    @ApiResponse(responseCode = "200", description = "Araç durumu başarıyla güncellendi")
+    @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @PutMapping("/{vehicleId}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
     public ResponseEntity<Vehicle> changeStatus(
-            @PathVariable Long vehicleId,
+            @Parameter(description = "Araç ID") @PathVariable Long vehicleId,
             @RequestBody ChangeStatusRequest request
     ) {
         Vehicle vehicle = vehicleService.changeStatus(vehicleId, request.newStatus);
@@ -90,9 +132,17 @@ public class VehicleController {
     /**
      * Get vehicle by ID
      */
+    @Operation(
+            summary = "Araç bilgisi getir",
+            description = "ID'ye göre araç bilgisini getirir."
+    )
+    @ApiResponse(responseCode = "200", description = "Araç başarıyla getirildi")
+    @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<Vehicle> getVehicle(@PathVariable Long id) {
+    public ResponseEntity<Vehicle> getVehicle(
+            @Parameter(description = "Araç ID", example = "1") @PathVariable Long id
+    ) {
         Vehicle vehicle = vehicleService.findById(id);
         return ResponseEntity.ok(vehicle);
     }
@@ -100,9 +150,17 @@ public class VehicleController {
     /**
      * Get vehicle by plate number
      */
+    @Operation(
+            summary = "Plakaya göre araç getir",
+            description = "Plaka numarasına göre araç bilgisini getirir."
+    )
+    @ApiResponse(responseCode = "200", description = "Araç başarıyla getirildi")
+    @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @GetMapping("/plate/{plateNumber}")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<Vehicle> getVehicleByPlate(@PathVariable String plateNumber) {
+    public ResponseEntity<Vehicle> getVehicleByPlate(
+            @Parameter(description = "Plaka numarası", example = "34ABC123") @PathVariable String plateNumber
+    ) {
         Vehicle vehicle = vehicleService.findByPlateNumber(plateNumber);
         return ResponseEntity.ok(vehicle);
     }
@@ -110,11 +168,16 @@ public class VehicleController {
     /**
      * Get all vehicles (with optional filters)
      */
+    @Operation(
+            summary = "Tüm araçları listele",
+            description = "Sistemdeki tüm araçları listeler. Depo ve durum bilgisine göre filtrelenebilir."
+    )
+    @ApiResponse(responseCode = "200", description = "Araç listesi başarıyla döndürüldü")
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
     public ResponseEntity<List<Vehicle>> getAllVehicles(
-            @RequestParam(required = false) Long depotId,
-            @RequestParam(required = false) VehicleStatus status
+            @Parameter(description = "Depo ID'ye göre filtrele") @RequestParam(required = false) Long depotId,
+            @Parameter(description = "Araç durumuna göre filtrele") @RequestParam(required = false) VehicleStatus status
     ) {
         List<Vehicle> vehicles;
         if (depotId != null) {
@@ -129,20 +192,36 @@ public class VehicleController {
 
     // ===== DTOs =====
 
+    @Schema(description = "Araç kayıt request DTO")
     public record RegisterVehicleRequest(
+            @Schema(description = "Depo ID", example = "1", required = true)
             Long depotId,
+
+            @Schema(description = "Araç tipi ID", example = "1", required = true)
             Long vehicleTypeId,
+
+            @Schema(description = "Plaka numarası", example = "34ABC123", required = true)
             String plateNumber
     ) {}
 
+    @Schema(description = "Rotaya atama request DTO")
     public record AssignToRouteRequest(
+            @Schema(description = "Toplama planı ID", example = "1", required = true)
             Long collectionPlanId,
+
+            @Schema(description = "Sürücü adı", example = "Mehmet Yılmaz", required = true)
             String driverName,
+
+            @Schema(description = "Sürücü belgesi numarası", example = "12345678901", required = true)
             String licenseNumber,
+
+            @Schema(description = "Sürücü telefonu", example = "05551234567", required = true)
             String phone
     ) {}
 
+    @Schema(description = "Araç durumu değiştirme request DTO")
     public record ChangeStatusRequest(
+            @Schema(description = "Yeni araç durumu", example = "AVAILABLE", required = true)
             VehicleStatus newStatus
     ) {}
 }
