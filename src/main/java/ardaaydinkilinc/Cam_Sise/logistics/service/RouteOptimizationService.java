@@ -2,6 +2,7 @@ package ardaaydinkilinc.Cam_Sise.logistics.service;
 
 import ardaaydinkilinc.Cam_Sise.core.domain.Filler;
 import ardaaydinkilinc.Cam_Sise.core.repository.FillerRepository;
+import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.Depot;
@@ -220,23 +221,41 @@ public class RouteOptimizationService {
     private List<CVRPOptimizer.CollectionNode> convertRequestsToNodes(
             List<CollectionRequest> requests
     ) {
+        // Group requests by fillerId to merge multiple asset types from same filler
+        Map<Long, List<CollectionRequest>> requestsByFiller = requests.stream()
+                .collect(Collectors.groupingBy(CollectionRequest::getFillerId));
+
         List<CVRPOptimizer.CollectionNode> nodes = new ArrayList<>();
 
-        for (CollectionRequest request : requests) {
-            Filler filler = fillerRepository.findById(request.getFillerId())
-                    .orElseThrow(() -> new IllegalArgumentException("Filler not found: " + request.getFillerId()));
+        // Create ONE node per filler with combined demand (pallets + separators)
+        for (Map.Entry<Long, List<CollectionRequest>> entry : requestsByFiller.entrySet()) {
+            Long fillerId = entry.getKey();
+            List<CollectionRequest> fillerRequests = entry.getValue();
 
-            // Determine demand based on asset type
-            Capacity demand = switch (request.getAssetType()) {
-                case PALLET -> new Capacity(request.getEstimatedQuantity(), 0);
-                case SEPARATOR -> new Capacity(0, request.getEstimatedQuantity());
-            };
+            Filler filler = fillerRepository.findById(fillerId)
+                    .orElseThrow(() -> new IllegalArgumentException("Filler not found: " + fillerId));
+
+            // Sum all pallets and separators for this filler
+            int totalPallets = fillerRequests.stream()
+                    .filter(r -> r.getAssetType() == AssetType.PALLET)
+                    .mapToInt(CollectionRequest::getEstimatedQuantity)
+                    .sum();
+
+            int totalSeparators = fillerRequests.stream()
+                    .filter(r -> r.getAssetType() == AssetType.SEPARATOR)
+                    .mapToInt(CollectionRequest::getEstimatedQuantity)
+                    .sum();
+
+            Capacity combinedDemand = new Capacity(totalPallets, totalSeparators);
 
             nodes.add(new CVRPOptimizer.CollectionNode(
                     filler.getId(),
                     filler.getLocation(),
-                    demand
+                    combinedDemand
             ));
+
+            log.debug("Merged {} requests from filler {} into single node: {} pallets, {} separators",
+                    fillerRequests.size(), fillerId, totalPallets, totalSeparators);
         }
 
         return nodes;
