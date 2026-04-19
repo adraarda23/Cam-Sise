@@ -47,7 +47,24 @@ public class VehicleService {
     }
 
     /**
-     * Assign vehicle to a collection route.
+     * Assign vehicle to a collection plan (without driver info).
+     */
+    public Vehicle assignToPlan(Long vehicleId, Long collectionPlanId) {
+        log.info("Assigning vehicle to plan: vehicleId={}, collectionPlanId={}", vehicleId, collectionPlanId);
+
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
+
+        vehicle.assignToPlan(collectionPlanId);
+        vehicle = vehicleRepository.save(vehicle);
+
+        log.info("Vehicle assigned to plan successfully: vehicleId={}, collectionPlanId={}", vehicleId, collectionPlanId);
+
+        return vehicle;
+    }
+
+    /**
+     * Assign vehicle to a collection route (with driver info).
      */
     public Vehicle assignToRoute(
             Long vehicleId,

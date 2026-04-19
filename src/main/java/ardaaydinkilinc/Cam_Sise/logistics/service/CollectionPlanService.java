@@ -74,8 +74,8 @@ public class CollectionPlanService {
         plan.assignVehicle(vehicleId);
         plan = collectionPlanRepository.save(plan);
 
-        // Update vehicle status to ON_ROUTE
-        vehicleService.changeStatus(vehicleId, VehicleStatus.ON_ROUTE);
+        // Change vehicle status to ON_ROUTE
+        vehicleService.assignToPlan(vehicleId, planId);
 
         log.info("Vehicle assigned to plan: planId={}, vehicleId={}", planId, vehicleId);
 
@@ -138,9 +138,25 @@ public class CollectionPlanService {
         plan.cancel();
         plan = collectionPlanRepository.save(plan);
 
-        // Return vehicle to depot if it was assigned
+        // Return vehicle to depot if it was assigned and still ON_ROUTE
         if (plan.getAssignedVehicleId() != null) {
-            vehicleService.returnToDepot(plan.getAssignedVehicleId());
+            try {
+                vehicleService.returnToDepot(plan.getAssignedVehicleId());
+            } catch (IllegalStateException e) {
+                // Vehicle is not ON_ROUTE anymore (e.g., moved to MAINTENANCE)
+                // Just clear the vehicle's plan reference
+                log.warn("Vehicle {} is not ON_ROUTE, clearing plan reference only: {}",
+                        plan.getAssignedVehicleId(), e.getMessage());
+
+                // Fetch vehicle and clear its collection plan reference
+                var vehicle = vehicleService.findById(plan.getAssignedVehicleId());
+                if (vehicle.getCurrentCollectionPlanId() != null) {
+                    // Vehicle needs manual cleanup - we can't call returnToDepot
+                    // This is handled by the vehicle's own state management
+                    log.info("Vehicle {} plan reference will be cleared by vehicle state management",
+                            plan.getAssignedVehicleId());
+                }
+            }
         }
 
         log.info("Collection plan cancelled: planId={}", planId);

@@ -2,7 +2,12 @@ package ardaaydinkilinc.Cam_Sise.logistics.service.event;
 
 import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionRequestService;
 import ardaaydinkilinc.Cam_Sise.logistics.service.RouteOptimizationService;
+import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionPlanService;
+import ardaaydinkilinc.Cam_Sise.logistics.service.VehicleService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.event.*;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.Vehicle;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -22,6 +27,8 @@ public class LogisticsEventHandler {
 
     private final CollectionRequestService collectionRequestService;
     private final RouteOptimizationService routeOptimizationService;
+    private final CollectionPlanService collectionPlanService;
+    private final VehicleService vehicleService;
 
     /**
      * Handle CollectionRequestApproved event
@@ -149,5 +156,50 @@ public class LogisticsEventHandler {
 
         // TODO: Initialize routing system for this depot
         // TODO: Update logistics network
+    }
+
+    /**
+     * Handle VehicleStatusChanged event
+     * Automatically cancel active collection plan when vehicle leaves ON_ROUTE status
+     */
+    @EventListener
+    @Async
+    public void handleVehicleStatusChanged(VehicleStatusChanged event) {
+        log.info("🚗 Vehicle status changed: vehicleId={}, {} -> {}",
+                event.vehicleId(),
+                event.oldStatus(),
+                event.newStatus());
+
+        // If vehicle is leaving ON_ROUTE status (accident, maintenance, etc.)
+        if (event.oldStatus() == VehicleStatus.ON_ROUTE && event.newStatus() != VehicleStatus.ON_ROUTE) {
+            try {
+                // Find active IN_PROGRESS plans for this vehicle
+                var activePlans = collectionPlanService.findByVehicle(event.vehicleId())
+                        .stream()
+                        .filter(plan -> plan.getStatus() == PlanStatus.IN_PROGRESS)
+                        .toList();
+
+                if (!activePlans.isEmpty()) {
+                    for (var plan : activePlans) {
+                        log.warn("⚠️ Vehicle {} left ON_ROUTE status while on active plan {}. Cancelling plan.",
+                                event.vehicleId(),
+                                plan.getId());
+
+                        // Cancel the active plan
+                        collectionPlanService.cancelPlan(plan.getId());
+
+                        log.info("✅ Collection plan {} automatically cancelled due to vehicle status change",
+                                plan.getId());
+                    }
+                } else {
+                    log.info("ℹ️ No active plans found for vehicle {}", event.vehicleId());
+                }
+            } catch (Exception e) {
+                log.error("❌ Failed to cancel collection plan for vehicle {}: {}",
+                        event.vehicleId(),
+                        e.getMessage(),
+                        e);
+            }
+        }
     }
 }

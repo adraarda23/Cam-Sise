@@ -77,7 +77,27 @@ public class Vehicle extends AggregateRoot<Long> {
     }
 
     /**
-     * Assign vehicle to a collection route
+     * Assign vehicle to a collection plan (without driver info)
+     */
+    public void assignToPlan(Long collectionPlanId) {
+        if (this.status != VehicleStatus.AVAILABLE) {
+            throw new IllegalStateException("Vehicle is not available for assignment");
+        }
+
+        this.currentCollectionPlanId = collectionPlanId;
+        this.status = VehicleStatus.ON_ROUTE;
+        this.updatedAt = LocalDateTime.now();
+
+        addDomainEvent(new VehicleAssignedToRoute(
+                this.id,
+                collectionPlanId,
+                null,
+                LocalDateTime.now()
+        ));
+    }
+
+    /**
+     * Assign vehicle to a collection route (with driver info)
      */
     public void assignToRoute(Long collectionPlanId, DriverInfo driver) {
         if (this.status != VehicleStatus.AVAILABLE) {
@@ -134,12 +154,38 @@ public class Vehicle extends AggregateRoot<Long> {
     }
 
     /**
-     * Change vehicle status
+     * Change vehicle status manually (with business rule validation)
      */
     public void changeStatus(VehicleStatus newStatus) {
+        // Cannot manually change to ON_ROUTE (must use assignToRoute)
+        if (newStatus == VehicleStatus.ON_ROUTE) {
+            throw new IllegalStateException(
+                "Cannot manually change status to ON_ROUTE. Use assignToRoute() method."
+            );
+        }
+
+        // Cannot manually change from ON_ROUTE to AVAILABLE (must use returnToDepot)
+        if (this.status == VehicleStatus.ON_ROUTE && newStatus == VehicleStatus.AVAILABLE) {
+            throw new IllegalStateException(
+                "Cannot manually change status from ON_ROUTE to AVAILABLE. Use returnToDepot() method."
+            );
+        }
+
+        // Cannot deactivate vehicle while on route
+        if (this.status == VehicleStatus.ON_ROUTE && newStatus == VehicleStatus.INACTIVE) {
+            throw new IllegalStateException("Cannot deactivate vehicle while on route");
+        }
+
         VehicleStatus oldStatus = this.status;
         this.status = newStatus;
         this.updatedAt = LocalDateTime.now();
+
+        // If leaving ON_ROUTE status (e.g., going to MAINTENANCE due to accident)
+        // Clear the current collection plan reference
+        if (oldStatus == VehicleStatus.ON_ROUTE && newStatus != VehicleStatus.ON_ROUTE) {
+            this.currentCollectionPlanId = null;
+            this.currentDriver = null;
+        }
 
         addDomainEvent(new VehicleStatusChanged(
                 this.id,
