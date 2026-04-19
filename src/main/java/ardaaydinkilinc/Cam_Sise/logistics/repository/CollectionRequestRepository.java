@@ -20,4 +20,6 @@ public interface CollectionRequestRepository extends JpaRepository<CollectionReq
     List<CollectionRequest> findByAssetType(AssetType assetType);
 
     List<CollectionRequest> findByCollectionPlanId(Long collectionPlanId);
+
+    List<CollectionRequest> findByFillerIdAndAssetTypeAndStatusIn(Long fillerId, AssetType assetType, List<RequestStatus> statuses);
 }

@@ -1,9 +1,12 @@
 package ardaaydinkilinc.Cam_Sise.logistics.service;
 
+import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
+import ardaaydinkilinc.Cam_Sise.inventory.service.FillerStockService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
+import ardaaydinkilinc.Cam_Sise.shared.exception.BusinessRuleViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ import java.util.List;
 public class CollectionRequestService {
 
     private final CollectionRequestRepository collectionRequestRepository;
+    private final FillerStockService fillerStockService;
 
     /**
      * Create an automatic collection request (triggered by threshold).
@@ -44,6 +48,8 @@ public class CollectionRequestService {
 
     /**
      * Create a manual collection request (initiated by customer).
+     * If a PENDING request already exists for the same filler and asset type,
+     * it will be merged by adding the new quantity to the existing one.
      */
     public CollectionRequest createManual(
             Long fillerId,
@@ -51,14 +57,101 @@ public class CollectionRequestService {
             Integer estimatedQuantity,
             Long requestingUserId
     ) {
-        log.info("Creating manual collection request: fillerId={}, assetType={}, userId={}",
-                fillerId, assetType, requestingUserId);
+        log.info("Creating manual collection request: fillerId={}, assetType={}, quantity={}, userId={}",
+                fillerId, assetType, estimatedQuantity, requestingUserId);
+
+        // Get current stock
+        FillerStock stock = fillerStockService.getStock(fillerId, assetType);
+
+        // Calculate total quantity in active requests (PENDING + APPROVED)
+        List<CollectionRequest> activeRequests = collectionRequestRepository.findByFillerIdAndAssetTypeAndStatusIn(
+                fillerId,
+                assetType,
+                List.of(RequestStatus.PENDING, RequestStatus.APPROVED)
+        );
+
+        // Check if there's an existing PENDING request for this filler and asset type
+        CollectionRequest existingPendingRequest = activeRequests.stream()
+                .filter(r -> r.getStatus() == RequestStatus.PENDING)
+                .findFirst()
+                .orElse(null);
+
+        if (existingPendingRequest != null) {
+            // MERGE: Update existing PENDING request
+            log.info("Found existing PENDING request (id={}), merging quantities", existingPendingRequest.getId());
+
+            // Calculate active quantity excluding the existing pending request
+            int totalActiveExcludingPending = activeRequests.stream()
+                    .filter(r -> !r.getId().equals(existingPendingRequest.getId()))
+                    .mapToInt(CollectionRequest::getEstimatedQuantity)
+                    .sum();
+
+            int availableQuantity = stock.getCurrentQuantity() - totalActiveExcludingPending;
+            int newTotalQuantity = existingPendingRequest.getEstimatedQuantity() + estimatedQuantity;
+
+            // Validate: new total cannot exceed available stock
+            if (newTotalQuantity > availableQuantity) {
+                String errorMessage = String.format(
+                    "Toplam talep miktarı (%d = mevcut %d + yeni %d), kullanılabilir stoktan (%d) fazla olamaz. " +
+                    "Mevcut stok: %d, Diğer aktif taleplerde: %d. Dolumcu: %d, Asset: %s",
+                    newTotalQuantity,
+                    existingPendingRequest.getEstimatedQuantity(),
+                    estimatedQuantity,
+                    availableQuantity,
+                    stock.getCurrentQuantity(),
+                    totalActiveExcludingPending,
+                    fillerId,
+                    assetType
+                );
+                log.warn(errorMessage);
+                throw new BusinessRuleViolationException(errorMessage);
+            }
+
+            // Update existing request quantity
+            int oldQuantity = existingPendingRequest.getEstimatedQuantity();
+            existingPendingRequest.updateQuantity(newTotalQuantity);
+            CollectionRequest updatedRequest = collectionRequestRepository.save(existingPendingRequest);
+
+            log.info("PENDING request updated (merged): id={}, oldQuantity={}, addedQuantity={}, newQuantity={}, fillerId={}",
+                    updatedRequest.getId(),
+                    oldQuantity,
+                    estimatedQuantity,
+                    newTotalQuantity,
+                    fillerId);
+
+            return updatedRequest;
+        }
+
+        // No existing PENDING request - create new one
+        int totalActiveRequestQuantity = activeRequests.stream()
+                .mapToInt(CollectionRequest::getEstimatedQuantity)
+                .sum();
+
+        int availableQuantity = stock.getCurrentQuantity() - totalActiveRequestQuantity;
+
+        // Validate: Cannot request more than available stock
+        if (estimatedQuantity > availableQuantity) {
+            String errorMessage = String.format(
+                "Toplama talebi miktarı (%d), kullanılabilir stoktan (%d) fazla olamaz. " +
+                "Mevcut stok: %d, Aktif taleplerde: %d, Kullanılabilir: %d. Dolumcu: %d, Asset: %s",
+                estimatedQuantity,
+                availableQuantity,
+                stock.getCurrentQuantity(),
+                totalActiveRequestQuantity,
+                availableQuantity,
+                fillerId,
+                assetType
+            );
+            log.warn(errorMessage);
+            throw new BusinessRuleViolationException(errorMessage);
+        }
 
         CollectionRequest request = CollectionRequest.createManual(
                 fillerId, assetType, estimatedQuantity, requestingUserId);
         request = collectionRequestRepository.save(request);
 
-        log.info("Manual collection request created: id={}, fillerId={}", request.getId(), fillerId);
+        log.info("Manual collection request created: id={}, fillerId={}, available={}, active={}",
+                request.getId(), fillerId, availableQuantity, totalActiveRequestQuantity);
 
         return request;
     }

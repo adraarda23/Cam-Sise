@@ -2,6 +2,7 @@ package ardaaydinkilinc.Cam_Sise.logistics.service;
 
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Distance;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Duration;
@@ -24,6 +25,7 @@ import java.util.List;
 public class CollectionPlanService {
 
     private final CollectionPlanRepository collectionPlanRepository;
+    private final VehicleService vehicleService;
 
     /**
      * Generate a new collection plan (typically called by CVRP optimizer).
@@ -72,6 +74,9 @@ public class CollectionPlanService {
         plan.assignVehicle(vehicleId);
         plan = collectionPlanRepository.save(plan);
 
+        // Update vehicle status to ON_ROUTE
+        vehicleService.changeStatus(vehicleId, VehicleStatus.ON_ROUTE);
+
         log.info("Vehicle assigned to plan: planId={}, vehicleId={}", planId, vehicleId);
 
         return plan;
@@ -111,6 +116,11 @@ public class CollectionPlanService {
         plan.complete(actualPalletsCollected, actualSeparatorsCollected);
         plan = collectionPlanRepository.save(plan);
 
+        // Return vehicle to depot (change status to AVAILABLE)
+        if (plan.getAssignedVehicleId() != null) {
+            vehicleService.returnToDepot(plan.getAssignedVehicleId());
+        }
+
         log.info("Collection completed: planId={}", planId);
 
         return plan;
@@ -127,6 +137,11 @@ public class CollectionPlanService {
 
         plan.cancel();
         plan = collectionPlanRepository.save(plan);
+
+        // Return vehicle to depot if it was assigned
+        if (plan.getAssignedVehicleId() != null) {
+            vehicleService.returnToDepot(plan.getAssignedVehicleId());
+        }
 
         log.info("Collection plan cancelled: planId={}", planId);
 

@@ -208,9 +208,15 @@ public class FillerController {
             String country,
 
             @Schema(description = "Enlem (Latitude)", example = "40.2108", required = true)
+            @jakarta.validation.constraints.NotNull(message = "Enlem (latitude) zorunludur")
+            @jakarta.validation.constraints.DecimalMin(value = "-90.0", message = "Enlem (latitude) -90 ile 90 arasında olmalıdır")
+            @jakarta.validation.constraints.DecimalMax(value = "90.0", message = "Enlem (latitude) -90 ile 90 arasında olmalıdır")
             Double latitude,
 
             @Schema(description = "Boylam (Longitude)", example = "29.0138", required = true)
+            @jakarta.validation.constraints.NotNull(message = "Boylam (longitude) zorunludur")
+            @jakarta.validation.constraints.DecimalMin(value = "-180.0", message = "Boylam (longitude) -180 ile 180 arasında olmalıdır")
+            @jakarta.validation.constraints.DecimalMax(value = "180.0", message = "Boylam (longitude) -180 ile 180 arasında olmalıdır")
             Double longitude,
 
             @Schema(description = "İletişim telefonu", example = "02241234567", required = true)
@@ -241,9 +247,15 @@ public class FillerController {
     @Schema(description = "Dolumcu konum güncelleme request DTO")
     public record UpdateLocationRequest(
             @Schema(description = "Yeni enlem (Latitude)", example = "40.2200", required = true)
+            @jakarta.validation.constraints.NotNull(message = "Enlem (latitude) zorunludur")
+            @jakarta.validation.constraints.DecimalMin(value = "-90.0", message = "Enlem (latitude) -90 ile 90 arasında olmalıdır")
+            @jakarta.validation.constraints.DecimalMax(value = "90.0", message = "Enlem (latitude) -90 ile 90 arasında olmalıdır")
             Double latitude,
 
             @Schema(description = "Yeni boylam (Longitude)", example = "29.0200", required = true)
+            @jakarta.validation.constraints.NotNull(message = "Boylam (longitude) zorunludur")
+            @jakarta.validation.constraints.DecimalMin(value = "-180.0", message = "Boylam (longitude) -180 ile 180 arasında olmalıdır")
+            @jakarta.validation.constraints.DecimalMax(value = "180.0", message = "Boylam (longitude) -180 ile 180 arasında olmalıdır")
             Double longitude
     ) {}
 }

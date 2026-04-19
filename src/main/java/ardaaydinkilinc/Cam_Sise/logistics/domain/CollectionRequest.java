@@ -194,6 +194,22 @@ public class CollectionRequest extends AggregateRoot<Long> {
         this.updatedAt = LocalDateTime.now();
     }
 
+    /**
+     * Update the estimated quantity (for merging requests)
+     */
+    public void updateQuantity(Integer newQuantity) {
+        if (this.status != RequestStatus.PENDING) {
+            throw new IllegalStateException("Can only update quantity for PENDING requests");
+        }
+
+        if (newQuantity == null || newQuantity <= 0) {
+            throw new IllegalArgumentException("Quantity must be positive");
+        }
+
+        this.estimatedQuantity = newQuantity;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

@@ -15,13 +15,13 @@ public class RouteConstraints {
      * Maximum route distance in kilometers.
      * Based on realistic daily driving limits (8-10 hours @ 80 km/h avg speed).
      */
-    private final double maxRouteDistanceKm = 800.0;
+    private final double maxRouteDistanceKm = 3000.0;
 
     /**
      * Maximum route duration in minutes (10 hours).
      * Includes driving time + service time at each stop.
      */
-    private final int maxRouteDurationMinutes = 600;
+    private final int maxRouteDurationMinutes = 3000;
 
     /**
      * Service time per stop in minutes.

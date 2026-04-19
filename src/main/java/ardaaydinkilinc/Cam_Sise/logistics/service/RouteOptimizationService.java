@@ -115,11 +115,20 @@ public class RouteOptimizationService {
                 routeStopsJson
         );
 
-        log.info("✅ Collection plan created: planId={}, stops={}, distance={} km, duration={} min",
+        // 9. Mark all used requests as SCHEDULED
+        for (CollectionRequest request : approvedRequests) {
+            if (request.getStatus() == RequestStatus.APPROVED) { // Only schedule if still APPROVED
+                request.schedule(plan.getId());
+                collectionRequestRepository.save(request);
+            }
+        }
+
+        log.info("✅ Collection plan created: planId={}, stops={}, distance={} km, duration={} min, requests scheduled={}",
                 plan.getId(),
                 solution.route().size(),
                 String.format("%.2f", solution.totalDistance()),
-                estimatedDurationMinutes);
+                estimatedDurationMinutes,
+                approvedRequests.size());
 
         return plan;
     }
@@ -184,7 +193,7 @@ public class RouteOptimizationService {
         String routeStopsJson = convertSolutionToJson(solution);
         int estimatedDurationMinutes = distanceCalculator.estimateDuration(solution.totalDistance());
 
-        return collectionPlanService.generatePlan(
+        CollectionPlan plan = collectionPlanService.generatePlan(
                 depotId,
                 solution.totalDistance(),
                 estimatedDurationMinutes,
@@ -193,6 +202,16 @@ public class RouteOptimizationService {
                 plannedDate,
                 routeStopsJson
         );
+
+        // Mark all used requests as SCHEDULED
+        for (CollectionRequest request : requests) {
+            request.schedule(plan.getId());
+            collectionRequestRepository.save(request);
+        }
+
+        log.info("✅ Custom plan created: planId={}, requests scheduled={}", plan.getId(), requests.size());
+
+        return plan;
     }
 
     /**
@@ -323,15 +342,31 @@ public class RouteOptimizationService {
                     routeStopsJson
             );
 
+            // Mark requests for fillers in this route as SCHEDULED
+            List<Long> fillerIdsInRoute = route.route().stream()
+                    .map(CVRPOptimizer.CollectionNode::fillerId)
+                    .toList();
+
+            List<CollectionRequest> requestsForThisRoute = approvedRequests.stream()
+                    .filter(req -> fillerIdsInRoute.contains(req.getFillerId()))
+                    .filter(req -> req.getStatus() == RequestStatus.APPROVED) // Only schedule if still APPROVED
+                    .toList();
+
+            for (CollectionRequest request : requestsForThisRoute) {
+                request.schedule(plan.getId());
+                collectionRequestRepository.save(request);
+            }
+
             plans.add(plan);
 
-            log.info("Created plan {}/{}: planId={}, stops={}, distance={} km, duration={} min",
+            log.info("Created plan {}/{}: planId={}, stops={}, distance={} km, duration={} min, requests scheduled={}",
                     i + 1,
                     solution.vehicleRoutes().size(),
                     plan.getId(),
                     route.route().size(),
                     String.format("%.2f", route.totalDistance()),
-                    estimatedDurationMinutes);
+                    estimatedDurationMinutes,
+                    requestsForThisRoute.size());
         }
 
         log.info("✅ Multi-vehicle optimization completed: {} plans created, {} vehicles used, total {} km",

@@ -161,9 +161,15 @@ public class DepotController {
             String country,
 
             @Schema(description = "Enlem (Latitude)", example = "41.0082", required = true)
+            @jakarta.validation.constraints.NotNull(message = "Enlem (latitude) zorunludur")
+            @jakarta.validation.constraints.DecimalMin(value = "-90.0", message = "Enlem (latitude) -90 ile 90 arasında olmalıdır")
+            @jakarta.validation.constraints.DecimalMax(value = "90.0", message = "Enlem (latitude) -90 ile 90 arasında olmalıdır")
             Double latitude,
 
             @Schema(description = "Boylam (Longitude)", example = "28.9784", required = true)
+            @jakarta.validation.constraints.NotNull(message = "Boylam (longitude) zorunludur")
+            @jakarta.validation.constraints.DecimalMin(value = "-180.0", message = "Boylam (longitude) -180 ile 180 arasında olmalıdır")
+            @jakarta.validation.constraints.DecimalMax(value = "180.0", message = "Boylam (longitude) -180 ile 180 arasında olmalıdır")
             Double longitude
     ) {}
 }
