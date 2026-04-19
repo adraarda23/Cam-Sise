@@ -1,8 +1,12 @@
 package ardaaydinkilinc.Cam_Sise.logistics.service;
 
+import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.Vehicle;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.DriverInfo;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +26,8 @@ import java.util.List;
 public class VehicleService {
 
     private final VehicleRepository vehicleRepository;
+    private final CollectionPlanRepository collectionPlanRepository;
+    private final CollectionRequestRepository collectionRequestRepository;
 
     /**
      * Register a new vehicle.
@@ -130,10 +136,46 @@ public class VehicleService {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
 
+        VehicleStatus oldStatus = vehicle.getStatus();
+
         vehicle.changeStatus(newStatus);
         vehicle = vehicleRepository.save(vehicle);
 
-        log.info("Vehicle status changed: vehicleId={}, newStatus={}", vehicleId, newStatus);
+        log.info("Vehicle status changed: vehicleId={}, oldStatus={}, newStatus={}", vehicleId, oldStatus, newStatus);
+
+        // CRITICAL: If vehicle is leaving ON_ROUTE status, cancel all active plans
+        if (oldStatus == VehicleStatus.ON_ROUTE && newStatus != VehicleStatus.ON_ROUTE) {
+            log.warn("⚠️ Vehicle {} leaving ON_ROUTE status ({} -> {}), cancelling active plans",
+                    vehicleId, oldStatus, newStatus);
+
+            // Find all active plans (IN_PROGRESS or ASSIGNED) for this vehicle
+            List<CollectionPlan> activePlans = collectionPlanRepository.findByAssignedVehicleId(vehicleId)
+                    .stream()
+                    .filter(plan -> plan.getStatus() == PlanStatus.IN_PROGRESS ||
+                                   plan.getStatus() == PlanStatus.ASSIGNED)
+                    .toList();
+
+            for (CollectionPlan plan : activePlans) {
+                log.warn("🚨 Cancelling plan {} (status: {}) due to vehicle {} going to {}",
+                        plan.getId(), plan.getStatus(), vehicleId, newStatus);
+
+                // Cancel the plan
+                plan.cancel();
+                collectionPlanRepository.save(plan);
+
+                // Cancel all collection requests for this plan
+                var requests = collectionRequestRepository.findByCollectionPlanId(plan.getId());
+                for (var request : requests) {
+                    log.info("Cancelling collection request {} from plan {}", request.getId(), plan.getId());
+                    request.cancel();
+                    collectionRequestRepository.save(request);
+                }
+
+                log.info("✅ Plan {} and its {} requests cancelled", plan.getId(), requests.size());
+            }
+
+            log.info("✅ Cancelled {} active plans for vehicle {}", activePlans.size(), vehicleId);
+        }
 
         return vehicle;
     }

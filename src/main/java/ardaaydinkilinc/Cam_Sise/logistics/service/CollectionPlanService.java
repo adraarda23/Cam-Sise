@@ -4,6 +4,7 @@ import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Distance;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Duration;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,8 @@ public class CollectionPlanService {
 
     private final CollectionPlanRepository collectionPlanRepository;
     private final VehicleService vehicleService;
+    private final CollectionRequestService collectionRequestService;
+    private final CollectionRequestRepository collectionRequestRepository;
 
     /**
      * Generate a new collection plan (typically called by CVRP optimizer).
@@ -137,6 +140,23 @@ public class CollectionPlanService {
 
         plan.cancel();
         plan = collectionPlanRepository.save(plan);
+
+        // Cancel all collection requests associated with this plan
+        var collectionRequests = collectionRequestRepository.findByCollectionPlanId(planId);
+        if (!collectionRequests.isEmpty()) {
+            log.info("Cancelling {} collection requests associated with plan {}",
+                    collectionRequests.size(), planId);
+
+            for (var request : collectionRequests) {
+                try {
+                    collectionRequestService.cancel(request.getId());
+                    log.info("Cancelled collection request {} due to plan cancellation", request.getId());
+                } catch (Exception e) {
+                    log.error("Failed to cancel collection request {}: {}",
+                            request.getId(), e.getMessage(), e);
+                }
+            }
+        }
 
         // Return vehicle to depot if it was assigned and still ON_ROUTE
         if (plan.getAssignedVehicleId() != null) {

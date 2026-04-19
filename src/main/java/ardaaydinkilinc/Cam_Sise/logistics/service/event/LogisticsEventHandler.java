@@ -13,6 +13,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.LocalDate;
 
@@ -161,9 +165,11 @@ public class LogisticsEventHandler {
     /**
      * Handle VehicleStatusChanged event
      * Automatically cancel active collection plan when vehicle leaves ON_ROUTE status
+     * NOTE: Uses @TransactionalEventListener to run AFTER the vehicle status change transaction commits
+     * This runs in a NEW transaction to avoid ConcurrentModificationException
      */
-    @EventListener
-    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleVehicleStatusChanged(VehicleStatusChanged event) {
         log.info("🚗 Vehicle status changed: vehicleId={}, {} -> {}",
                 event.vehicleId(),
@@ -173,19 +179,23 @@ public class LogisticsEventHandler {
         // If vehicle is leaving ON_ROUTE status (accident, maintenance, etc.)
         if (event.oldStatus() == VehicleStatus.ON_ROUTE && event.newStatus() != VehicleStatus.ON_ROUTE) {
             try {
-                // Find active IN_PROGRESS plans for this vehicle
+                // Find active IN_PROGRESS or ASSIGNED plans for this vehicle
                 var activePlans = collectionPlanService.findByVehicle(event.vehicleId())
                         .stream()
-                        .filter(plan -> plan.getStatus() == PlanStatus.IN_PROGRESS)
+                        .filter(plan -> plan.getStatus() == PlanStatus.IN_PROGRESS ||
+                                       plan.getStatus() == PlanStatus.ASSIGNED)
                         .toList();
 
                 if (!activePlans.isEmpty()) {
                     for (var plan : activePlans) {
-                        log.warn("⚠️ Vehicle {} left ON_ROUTE status while on active plan {}. Cancelling plan.",
+                        log.warn("⚠️ Vehicle {} left ON_ROUTE status ({} -> {}) while on active plan {} (status: {}). Cancelling plan.",
                                 event.vehicleId(),
-                                plan.getId());
+                                event.oldStatus(),
+                                event.newStatus(),
+                                plan.getId(),
+                                plan.getStatus());
 
-                        // Cancel the active plan
+                        // Cancel the active plan (this also cancels associated collection requests)
                         collectionPlanService.cancelPlan(plan.getId());
 
                         log.info("✅ Collection plan {} automatically cancelled due to vehicle status change",
@@ -199,6 +209,7 @@ public class LogisticsEventHandler {
                         event.vehicleId(),
                         e.getMessage(),
                         e);
+                // Don't re-throw - this is in a separate transaction, we don't want to affect the main one
             }
         }
     }
