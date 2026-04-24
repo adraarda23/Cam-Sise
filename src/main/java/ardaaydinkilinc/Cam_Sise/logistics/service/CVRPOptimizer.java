@@ -386,22 +386,21 @@ public class CVRPOptimizer {
         // Step 3: Sort savings in descending order
         savings.sort((a, b) -> Double.compare(b.saving, a.saving));
 
-        // Step 4: Merge routes based on savings
+        // Step 4: Merge routes based on savings — keep merging until we hit the vehicle target
         for (Saving saving : savings) {
             if (routes.size() <= maxVehicles) {
-                // Find routes containing i and j
-                Route routeI = findRouteContaining(routes, requests.get(saving.i));
-                Route routeJ = findRouteContaining(routes, requests.get(saving.j));
+                break; // Already at or under the vehicle limit, stop merging
+            }
 
-                if (routeI != null && routeJ != null && routeI != routeJ) {
-                    // Check if merge is feasible
-                    if (canMergeRoutes(routeI, routeJ, vehicleCapacity, saving.i, saving.j, requests)) {
-                        // Merge routes
-                        Route merged = mergeRoutes(routeI, routeJ, saving.i, saving.j, requests, distanceMatrix, depot);
-                        routes.remove(routeI);
-                        routes.remove(routeJ);
-                        routes.add(merged);
-                    }
+            Route routeI = findRouteContaining(routes, requests.get(saving.i));
+            Route routeJ = findRouteContaining(routes, requests.get(saving.j));
+
+            if (routeI != null && routeJ != null && routeI != routeJ) {
+                if (canMergeRoutes(routeI, routeJ, vehicleCapacity, saving.i, saving.j, requests, saving.saving)) {
+                    Route merged = mergeRoutes(routeI, routeJ, saving.i, saving.j, requests, distanceMatrix, depot);
+                    routes.remove(routeI);
+                    routes.remove(routeJ);
+                    routes.add(merged);
                 }
             }
         }
@@ -468,7 +467,8 @@ public class CVRPOptimizer {
             Capacity vehicleCapacity,
             int i,
             int j,
-            List<CollectionNode> requests
+            List<CollectionNode> requests,
+            double savingAmount
     ) {
         // Check capacity
         Capacity combinedLoad = r1.load.add(r2.load);
@@ -480,10 +480,18 @@ public class CVRPOptimizer {
         CollectionNode nodeI = requests.get(i);
         CollectionNode nodeJ = requests.get(j);
 
-        boolean iAtEnd = r1.isAtEnd(nodeI);
-        boolean jAtEnd = r2.isAtEnd(nodeJ);
+        if (!r1.isAtEnd(nodeI) || !r2.isAtEnd(nodeJ)) {
+            return false;
+        }
 
-        return iAtEnd && jAtEnd;
+        // Clarke-Wright: merged_distance = r1 + r2 - saving
+        // (saving = d(depot,i) + d(depot,j) - d(i,j), so merged avoids two depot returns)
+        double estimatedDistance = r1.distance + r2.distance - savingAmount;
+        int estimatedStops = r1.nodes.size() + r2.nodes.size();
+        int estimatedDuration = routeConstraints.calculateTotalDuration(estimatedDistance, estimatedStops);
+
+        return routeConstraints.isDistanceAcceptable(estimatedDistance) &&
+                routeConstraints.isDurationAcceptable(estimatedDuration);
     }
 
     /**

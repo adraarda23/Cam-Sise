@@ -41,6 +41,7 @@ public class RouteOptimizationService {
 
     private final CVRPOptimizer cvrpOptimizer;
     private final DistanceCalculator distanceCalculator;
+    private final RouteConstraints routeConstraints;
     private final CollectionPlanService collectionPlanService;
     private final CollectionRequestRepository collectionRequestRepository;
     private final DepotRepository depotRepository;
@@ -49,14 +50,15 @@ public class RouteOptimizationService {
     private final ObjectMapper objectMapper;
 
     /**
-     * Generate optimized collection plan for approved requests.
+     * Generate optimized collection plan(s) for approved requests.
+     * Automatically uses multiple vehicles when total demand exceeds single vehicle capacity.
      *
-     * @param depotId Depot to start from
+     * @param depotId    Depot to start from
      * @param plannedDate Date for collection
-     * @return Created collection plan
+     * @return List of created collection plans (1 per vehicle used)
      */
-    public CollectionPlan generateOptimizedPlan(Long depotId, LocalDate plannedDate) {
-        log.info("Generating optimized collection plan: depotId={}, date={}", depotId, plannedDate);
+    public List<CollectionPlan> generateOptimizedPlan(Long depotId, LocalDate plannedDate) {
+        log.info("Generating auto-optimized collection plan: depotId={}, date={}", depotId, plannedDate);
 
         // 1. Get depot
         Depot depot = depotRepository.findById(depotId)
@@ -72,7 +74,7 @@ public class RouteOptimizationService {
 
         log.info("Found {} approved requests", approvedRequests.size());
 
-        // 3. Get default vehicle type (largest capacity)
+        // 3. Get vehicle type with largest capacity
         VehicleType vehicleType = vehicleTypeRepository
                 .findByPoolOperatorIdAndActive(depot.getPoolOperatorId(), true)
                 .stream()
@@ -85,53 +87,81 @@ public class RouteOptimizationService {
         log.info("Using vehicle type: {} with capacity {}",
                 vehicleType.getName(), vehicleType.getCapacity().formatted());
 
-        // 4. Convert requests to CVRP nodes
+        // 4. Convert requests to CVRP nodes (merged per filler)
         List<CVRPOptimizer.CollectionNode> nodes = convertRequestsToNodes(approvedRequests);
 
-        // 5. Optimize route
-        CVRPOptimizer.RouteSolution solution = cvrpOptimizer.optimizeRoute(
-                depot.getLocation(),
-                nodes,
-                vehicleType.getCapacity()
-        );
+        // 5. Calculate total demand and determine minimum vehicles needed
+        Capacity totalDemand = nodes.stream()
+                .map(CVRPOptimizer.CollectionNode::demand)
+                .reduce(new Capacity(0, 0), Capacity::add);
 
-        if (solution.route().isEmpty()) {
-            throw new IllegalStateException("Optimization failed: no feasible route found");
-        }
+        int vehiclesNeeded = calculateNeededVehicles(totalDemand, vehicleType.getCapacity());
+        log.info("Total demand: {}, vehicles needed: {}", totalDemand.formatted(), vehiclesNeeded);
 
-        // 6. Convert solution to RouteStops JSON
-        String routeStopsJson = convertSolutionToJson(solution);
+        if (vehiclesNeeded <= 1) {
+            // Single vehicle trial — greedy nearest-neighbor + 2-opt
+            CVRPOptimizer.RouteSolution solution = cvrpOptimizer.optimizeRoute(
+                    depot.getLocation(), nodes, vehicleType.getCapacity());
 
-        // 7. Calculate duration
-        int estimatedDurationMinutes = distanceCalculator.estimateDuration(solution.totalDistance());
-
-        // 8. Create collection plan
-        CollectionPlan plan = collectionPlanService.generatePlan(
-                depotId,
-                solution.totalDistance(),
-                estimatedDurationMinutes,
-                solution.totalLoad().pallets(),
-                solution.totalLoad().separators(),
-                plannedDate,
-                routeStopsJson
-        );
-
-        // 9. Mark all used requests as SCHEDULED
-        for (CollectionRequest request : approvedRequests) {
-            if (request.getStatus() == RequestStatus.APPROVED) { // Only schedule if still APPROVED
-                request.schedule(plan.getId());
-                collectionRequestRepository.save(request);
+            if (solution.route().isEmpty()) {
+                throw new IllegalStateException("Optimization failed: no feasible route found");
             }
+
+            // Check distance / duration constraints — if exceeded, escalate to multi-vehicle
+            int trialDuration = routeConstraints.calculateTotalDuration(
+                    solution.totalDistance(), solution.route().size());
+            if (!routeConstraints.isDistanceAcceptable(solution.totalDistance()) ||
+                    !routeConstraints.isDurationAcceptable(trialDuration)) {
+
+                int byDistance = (int) Math.ceil(
+                        solution.totalDistance() / routeConstraints.getMaxRouteDistanceKm());
+                vehiclesNeeded = Math.max(vehiclesNeeded, byDistance);
+                log.info("Single-vehicle route ({} km, {} min) exceeds constraints → escalating to {} vehicles",
+                        String.format("%.1f", solution.totalDistance()), trialDuration, vehiclesNeeded);
+                return buildMultiVehiclePlans(depotId, depot, approvedRequests, nodes, vehicleType, plannedDate, vehiclesNeeded);
+            }
+
+            String routeStopsJson = convertSolutionToJson(solution);
+            int estimatedDurationMinutes = distanceCalculator.estimateDuration(solution.totalDistance());
+
+            CollectionPlan plan = collectionPlanService.generatePlan(
+                    depotId,
+                    solution.totalDistance(),
+                    estimatedDurationMinutes,
+                    solution.totalLoad().pallets(),
+                    solution.totalLoad().separators(),
+                    plannedDate,
+                    routeStopsJson
+            );
+
+            for (CollectionRequest request : approvedRequests) {
+                if (request.getStatus() == RequestStatus.APPROVED) {
+                    request.schedule(plan.getId());
+                    collectionRequestRepository.save(request);
+                }
+            }
+
+            log.info("✅ Single-vehicle plan created: planId={}, stops={}, distance={} km, duration={} min",
+                    plan.getId(), solution.route().size(),
+                    String.format("%.2f", solution.totalDistance()), estimatedDurationMinutes);
+
+            return List.of(plan);
+        } else {
+            // Multiple vehicles needed — Clarke-Wright savings
+            log.info("Total demand exceeds single-vehicle capacity → using {} vehicles", vehiclesNeeded);
+            return buildMultiVehiclePlans(depotId, depot, approvedRequests, nodes, vehicleType, plannedDate, vehiclesNeeded);
         }
+    }
 
-        log.info("✅ Collection plan created: planId={}, stops={}, distance={} km, duration={} min, requests scheduled={}",
-                plan.getId(),
-                solution.route().size(),
-                String.format("%.2f", solution.totalDistance()),
-                estimatedDurationMinutes,
-                approvedRequests.size());
-
-        return plan;
+    /**
+     * Calculate the minimum number of vehicles needed to carry the total demand.
+     */
+    private int calculateNeededVehicles(Capacity totalDemand, Capacity vehicleCapacity) {
+        int byPallets = vehicleCapacity.pallets() > 0
+                ? (int) Math.ceil((double) totalDemand.pallets() / vehicleCapacity.pallets()) : 1;
+        int bySeparators = vehicleCapacity.separators() > 0
+                ? (int) Math.ceil((double) totalDemand.separators() / vehicleCapacity.separators()) : 1;
+        return Math.max(1, Math.max(byPallets, bySeparators));
     }
 
     /**
@@ -289,12 +319,13 @@ public class RouteOptimizationService {
 
     /**
      * Generate optimized multi-vehicle collection plans.
-     * Creates multiple CollectionPlans for large number of fillers.
+     * maxVehicles is treated as an upper-bound; if total demand requires more vehicles,
+     * the minimum needed count takes priority so no requests are silently dropped.
      *
-     * @param depotId Depot to start from
+     * @param depotId     Depot to start from
      * @param plannedDate Date for collection
-     * @param maxVehicles Maximum number of vehicles to use
-     * @return List of created collection plans (one per vehicle)
+     * @param maxVehicles Preferred maximum number of vehicles (overridden if capacity demands more)
+     * @return List of created collection plans (one per vehicle used)
      */
     public List<CollectionPlan> generateMultiVehiclePlan(
             Long depotId,
@@ -304,11 +335,9 @@ public class RouteOptimizationService {
         log.info("Generating multi-vehicle collection plan: depotId={}, date={}, maxVehicles={}",
                 depotId, plannedDate, maxVehicles);
 
-        // 1. Get depot
         Depot depot = depotRepository.findById(depotId)
                 .orElseThrow(() -> new IllegalArgumentException("Depot not found: " + depotId));
 
-        // 2. Get approved collection requests
         List<CollectionRequest> approvedRequests = collectionRequestRepository
                 .findByStatus(RequestStatus.APPROVED);
 
@@ -318,7 +347,6 @@ public class RouteOptimizationService {
 
         log.info("Found {} approved requests for multi-vehicle optimization", approvedRequests.size());
 
-        // 3. Get vehicle type
         VehicleType vehicleType = vehicleTypeRepository
                 .findByPoolOperatorIdAndActive(depot.getPoolOperatorId(), true)
                 .stream()
@@ -328,23 +356,51 @@ public class RouteOptimizationService {
                 ))
                 .orElseThrow(() -> new IllegalStateException("No active vehicle types found"));
 
-        // 4. Convert requests to nodes
         List<CVRPOptimizer.CollectionNode> nodes = convertRequestsToNodes(approvedRequests);
 
-        // 5. Run multi-vehicle optimization
+        // Ensure we use at least as many vehicles as capacity demands
+        Capacity totalDemand = nodes.stream()
+                .map(CVRPOptimizer.CollectionNode::demand)
+                .reduce(new Capacity(0, 0), Capacity::add);
+
+        int minNeeded = calculateNeededVehicles(totalDemand, vehicleType.getCapacity());
+        // Cap at number of nodes (can't have more vehicles than stops), take the larger of
+        // what the user requested and what capacity requires
+        int vehiclesToUse = Math.max(minNeeded, Math.min(maxVehicles, nodes.size()));
+
+        if (vehiclesToUse != maxVehicles) {
+            log.info("Adjusted vehicle count from {} to {} (min needed by capacity: {})",
+                    maxVehicles, vehiclesToUse, minNeeded);
+        }
+
+        return buildMultiVehiclePlans(depotId, depot, approvedRequests, nodes, vehicleType, plannedDate, vehiclesToUse);
+    }
+
+    /**
+     * Internal: run Clarke-Wright optimization and persist one CollectionPlan per route.
+     */
+    private List<CollectionPlan> buildMultiVehiclePlans(
+            Long depotId,
+            Depot depot,
+            List<CollectionRequest> approvedRequests,
+            List<CVRPOptimizer.CollectionNode> nodes,
+            VehicleType vehicleType,
+            LocalDate plannedDate,
+            int vehiclesNeeded
+    ) {
         CVRPOptimizer.MultiVehicleSolution solution = cvrpOptimizer.optimizeMultiVehicleRoutes(
                 depot.getLocation(),
                 nodes,
                 vehicleType.getCapacity(),
-                maxVehicles
+                vehiclesNeeded
         );
 
         if (solution.vehicleRoutes().isEmpty()) {
             throw new IllegalStateException("Multi-vehicle optimization failed: no feasible routes found");
         }
 
-        // 6. Create CollectionPlan for each vehicle route
         List<CollectionPlan> plans = new ArrayList<>();
+
         for (int i = 0; i < solution.vehicleRoutes().size(); i++) {
             CVRPOptimizer.RouteSolution route = solution.vehicleRoutes().get(i);
 
@@ -361,14 +417,13 @@ public class RouteOptimizationService {
                     routeStopsJson
             );
 
-            // Mark requests for fillers in this route as SCHEDULED
             List<Long> fillerIdsInRoute = route.route().stream()
                     .map(CVRPOptimizer.CollectionNode::fillerId)
                     .toList();
 
             List<CollectionRequest> requestsForThisRoute = approvedRequests.stream()
                     .filter(req -> fillerIdsInRoute.contains(req.getFillerId()))
-                    .filter(req -> req.getStatus() == RequestStatus.APPROVED) // Only schedule if still APPROVED
+                    .filter(req -> req.getStatus() == RequestStatus.APPROVED)
                     .toList();
 
             for (CollectionRequest request : requestsForThisRoute) {
@@ -379,18 +434,13 @@ public class RouteOptimizationService {
             plans.add(plan);
 
             log.info("Created plan {}/{}: planId={}, stops={}, distance={} km, duration={} min, requests scheduled={}",
-                    i + 1,
-                    solution.vehicleRoutes().size(),
-                    plan.getId(),
-                    route.route().size(),
-                    String.format("%.2f", route.totalDistance()),
-                    estimatedDurationMinutes,
+                    i + 1, solution.vehicleRoutes().size(), plan.getId(), route.route().size(),
+                    String.format("%.2f", route.totalDistance()), estimatedDurationMinutes,
                     requestsForThisRoute.size());
         }
 
         log.info("✅ Multi-vehicle optimization completed: {} plans created, {} vehicles used, total {} km",
-                plans.size(),
-                solution.totalVehiclesUsed(),
+                plans.size(), solution.totalVehiclesUsed(),
                 String.format("%.2f", solution.totalDistance()));
 
         if (solution.unassignedRequests() > 0) {

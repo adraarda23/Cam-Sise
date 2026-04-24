@@ -119,6 +119,19 @@ public class CollectionPlanService {
         plan.complete(actualPalletsCollected, actualSeparatorsCollected);
         plan = collectionPlanRepository.save(plan);
 
+        // Mark all associated collection requests as COMPLETED
+        var collectionRequests = collectionRequestRepository.findByCollectionPlanId(planId);
+        if (!collectionRequests.isEmpty()) {
+            log.info("Completing {} collection requests associated with plan {}", collectionRequests.size(), planId);
+            for (var request : collectionRequests) {
+                try {
+                    collectionRequestService.complete(request.getId());
+                } catch (Exception e) {
+                    log.error("Failed to complete collection request {}: {}", request.getId(), e.getMessage(), e);
+                }
+            }
+        }
+
         // Return vehicle to depot (change status to AVAILABLE)
         if (plan.getAssignedVehicleId() != null) {
             vehicleService.returnToDepot(plan.getAssignedVehicleId());

@@ -31,25 +31,35 @@ public class RouteOptimizationController {
     private final RouteOptimizationService routeOptimizationService;
 
     /**
-     * Generate optimized collection plan for all approved requests.
-     * This endpoint triggers the CVRP optimizer to create an optimal route.
+     * Generate optimized collection plan(s) for all approved requests.
+     * Automatically uses multiple vehicles when total demand exceeds single-vehicle capacity.
      */
     @Operation(
-            summary = "Onaylı talepler için optimize rota oluştur",
-            description = "Tüm onaylanmış collection requestleri için CVRP algoritması ile optimize edilmiş toplama planı oluşturur"
+            summary = "Onaylı talepler için otomatik optimize rota oluştur",
+            description = "Tüm onaylanmış collection requestleri için CVRP algoritması ile optimize edilmiş toplama planı oluşturur. " +
+                    "Toplam talep tek araç kapasitesini aşıyorsa otomatik olarak çoklu araç kullanılır."
     )
-    @ApiResponse(responseCode = "201", description = "Rota planı başarıyla oluşturuldu")
+    @ApiResponse(responseCode = "201", description = "Rota planı/planları başarıyla oluşturuldu")
     @ApiResponse(responseCode = "400", description = "Onaylı talep bulunamadı veya optimizasyon başarısız")
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<CollectionPlan> generateOptimizedPlan(
+    public ResponseEntity<MultiVehicleOptimizeResponse> generateOptimizedPlan(
             @RequestBody OptimizeRouteRequest request
     ) {
-        CollectionPlan plan = routeOptimizationService.generateOptimizedPlan(
+        List<CollectionPlan> plans = routeOptimizationService.generateOptimizedPlan(
                 request.depotId,
                 request.plannedDate != null ? request.plannedDate : LocalDate.now().plusDays(1)
         );
-        return ResponseEntity.status(HttpStatus.CREATED).body(plan);
+
+        double totalDistance = plans.stream()
+                .mapToDouble(p -> p.getTotalDistance().kilometers())
+                .sum();
+        int totalPallets = plans.stream().mapToInt(CollectionPlan::getTotalCapacityPallets).sum();
+        int totalSeparators = plans.stream().mapToInt(CollectionPlan::getTotalCapacitySeparators).sum();
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                new MultiVehicleOptimizeResponse(plans, plans.size(), totalDistance, totalPallets, totalSeparators)
+        );
     }
 
     /**
