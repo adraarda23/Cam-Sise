@@ -3,6 +3,9 @@ package ardaaydinkilinc.Cam_Sise.logistics.controller;
 import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionPlanService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
+import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,6 +33,7 @@ import java.util.List;
 public class CollectionPlanController {
 
     private final CollectionPlanService collectionPlanService;
+    private final JwtUtil jwtUtil;
 
     /**
      * Generate a new collection plan (typically called by CVRP optimizer)
@@ -41,7 +45,7 @@ public class CollectionPlanController {
     @ApiResponse(responseCode = "201", description = "Toplama planı başarıyla oluşturuldu")
     @ApiResponse(responseCode = "400", description = "Geçersiz request parametreleri")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionPlan> generatePlan(@RequestBody GeneratePlanRequest request) {
         CollectionPlan plan = collectionPlanService.generatePlan(
                 request.depotId,
@@ -65,7 +69,7 @@ public class CollectionPlanController {
     @ApiResponse(responseCode = "200", description = "Araç başarıyla plana atandı")
     @ApiResponse(responseCode = "404", description = "Plan veya araç bulunamadı")
     @PostMapping("/{planId}/assign-vehicle")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionPlan> assignVehicle(
             @Parameter(description = "Toplama planı ID") @PathVariable Long planId,
             @RequestBody AssignVehicleRequest request
@@ -84,7 +88,7 @@ public class CollectionPlanController {
     @ApiResponse(responseCode = "200", description = "Toplama başarıyla başlatıldı")
     @ApiResponse(responseCode = "404", description = "Plan bulunamadı")
     @PostMapping("/{planId}/start")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionPlan> startCollection(
             @Parameter(description = "Toplama planı ID") @PathVariable Long planId
     ) {
@@ -102,7 +106,7 @@ public class CollectionPlanController {
     @ApiResponse(responseCode = "200", description = "Toplama başarıyla tamamlandı")
     @ApiResponse(responseCode = "404", description = "Plan bulunamadı")
     @PostMapping("/{planId}/complete")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionPlan> completeCollection(
             @Parameter(description = "Toplama planı ID") @PathVariable Long planId,
             @RequestBody CompleteCollectionRequest request
@@ -125,7 +129,7 @@ public class CollectionPlanController {
     @ApiResponse(responseCode = "200", description = "Plan başarıyla iptal edildi")
     @ApiResponse(responseCode = "404", description = "Plan bulunamadı")
     @PostMapping("/{planId}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionPlan> cancelPlan(
             @Parameter(description = "Toplama planı ID") @PathVariable Long planId
     ) {
@@ -143,7 +147,7 @@ public class CollectionPlanController {
     @ApiResponse(responseCode = "200", description = "Plan başarıyla getirildi")
     @ApiResponse(responseCode = "404", description = "Plan bulunamadı")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionPlan> getPlan(
             @Parameter(description = "Toplama planı ID", example = "1") @PathVariable Long id
     ) {
@@ -160,27 +164,17 @@ public class CollectionPlanController {
     )
     @ApiResponse(responseCode = "200", description = "Plan listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<List<CollectionPlan>> getAllPlans(
-            @Parameter(description = "Depo ID'ye göre filtrele") @RequestParam(required = false) Long depotId,
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<PageResponse<CollectionPlan>> getAllPlans(
             @Parameter(description = "Plan durumuna göre filtrele") @RequestParam(required = false) PlanStatus status,
-            @Parameter(description = "Araç ID'ye göre filtrele") @RequestParam(required = false) Long vehicleId,
-            @Parameter(description = "Başlangıç tarihi", example = "2026-04-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @Parameter(description = "Bitiş tarihi", example = "2026-04-30") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
+            @Parameter(description = "Başlangıç tarihi") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @Parameter(description = "Bitiş tarihi") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            HttpServletRequest httpRequest
     ) {
-        List<CollectionPlan> plans;
-        if (depotId != null) {
-            plans = collectionPlanService.findByDepot(depotId, status);
-        } else if (status != null) {
-            plans = collectionPlanService.findByStatus(status);
-        } else if (vehicleId != null) {
-            plans = collectionPlanService.findByVehicle(vehicleId);
-        } else if (startDate != null && endDate != null) {
-            plans = collectionPlanService.findByDateRange(startDate, endDate);
-        } else {
-            plans = collectionPlanService.findAll();
-        }
-        return ResponseEntity.ok(plans);
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
+        return ResponseEntity.ok(collectionPlanService.findByPoolOperatorIdPaged(poolOperatorId, status, startDate, endDate, page, size));
     }
 
     /**
@@ -192,7 +186,7 @@ public class CollectionPlanController {
     )
     @ApiResponse(responseCode = "200", description = "Plan listesi başarıyla döndürüldü")
     @GetMapping("/depot/{depotId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<List<CollectionPlan>> getPlansByDepot(
             @Parameter(description = "Depo ID") @PathVariable Long depotId,
             @Parameter(description = "Plan durumuna göre filtrele") @RequestParam(required = false) PlanStatus status
@@ -210,7 +204,7 @@ public class CollectionPlanController {
     )
     @ApiResponse(responseCode = "200", description = "Plan listesi başarıyla döndürüldü")
     @GetMapping("/vehicle/{vehicleId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<List<CollectionPlan>> getPlansByVehicle(
             @Parameter(description = "Araç ID") @PathVariable Long vehicleId
     ) {

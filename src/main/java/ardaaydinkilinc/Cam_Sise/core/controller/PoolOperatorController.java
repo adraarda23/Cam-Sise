@@ -65,7 +65,7 @@ public class PoolOperatorController {
     @ApiResponse(responseCode = "200", description = "Havuz operatörü başarıyla getirildi")
     @ApiResponse(responseCode = "404", description = "Havuz operatörü bulunamadı")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PoolOperator> getPoolOperator(
             @Parameter(description = "Havuz operatörü ID", example = "1") @PathVariable Long id
     ) {
@@ -138,7 +138,7 @@ public class PoolOperatorController {
     @ApiResponse(responseCode = "200", description = "İletişim bilgileri başarıyla güncellendi")
     @ApiResponse(responseCode = "404", description = "Havuz operatörü bulunamadı")
     @PutMapping("/{id}/contact")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<PoolOperator> updateContactInfo(
             @Parameter(description = "Havuz operatörü ID") @PathVariable Long id,
             @Valid @RequestBody UpdateContactInfoRequest request

@@ -139,6 +139,22 @@ public class Filler extends AggregateRoot<Long> {
     }
 
     /**
+     * Update name
+     */
+    public void updateName(String newName) {
+        this.name = newName;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Update address
+     */
+    public void updateAddress(Address newAddress) {
+        this.address = newAddress;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
      * Update contact information
      */
     public void updateContactInfo(ContactInfo newContactInfo) {

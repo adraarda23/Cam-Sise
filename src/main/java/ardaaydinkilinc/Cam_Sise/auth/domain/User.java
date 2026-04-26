@@ -102,10 +102,34 @@ public class User extends AggregateRoot<Long> {
     }
 
     /**
+     * Update username
+     */
+    public void updateUsername(String newUsername) {
+        this.username = newUsername;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Update full name
+     */
+    public void updateFullName(String newFullName) {
+        this.fullName = newFullName;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
      * Update password
      */
     public void updatePassword(String newPassword) {
         this.password = newPassword;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Deactivate user (soft delete)
+     */
+    public void deactivate() {
+        this.active = false;
         this.updatedAt = LocalDateTime.now();
     }
 

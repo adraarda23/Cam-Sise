@@ -2,6 +2,8 @@ package ardaaydinkilinc.Cam_Sise.logistics.controller;
 
 import ardaaydinkilinc.Cam_Sise.logistics.service.VehicleTypeService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.VehicleType;
+import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -27,6 +29,7 @@ import java.util.List;
 public class VehicleTypeController {
 
     private final VehicleTypeService vehicleTypeService;
+    private final JwtUtil jwtUtil;
 
     /**
      * Create a new vehicle type
@@ -38,10 +41,11 @@ public class VehicleTypeController {
     @ApiResponse(responseCode = "201", description = "Araç tipi başarıyla oluşturuldu")
     @ApiResponse(responseCode = "400", description = "Geçersiz request parametreleri")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<VehicleType> createVehicleType(@RequestBody CreateVehicleTypeRequest request) {
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<VehicleType> createVehicleType(@RequestBody CreateVehicleTypeRequest request, HttpServletRequest httpRequest) {
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
         VehicleType vehicleType = vehicleTypeService.createVehicleType(
-                request.poolOperatorId,
+                poolOperatorId,
                 request.name,
                 request.description,
                 request.palletCapacity,
@@ -60,7 +64,7 @@ public class VehicleTypeController {
     @ApiResponse(responseCode = "200", description = "Kapasite başarıyla güncellendi")
     @ApiResponse(responseCode = "404", description = "Araç tipi bulunamadı")
     @PutMapping("/{id}/capacity")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<VehicleType> updateCapacity(
             @Parameter(description = "Araç tipi ID") @PathVariable Long id,
             @RequestBody UpdateCapacityRequest request
@@ -83,7 +87,7 @@ public class VehicleTypeController {
     @ApiResponse(responseCode = "200", description = "Araç tipi başarıyla devre dışı bırakıldı")
     @ApiResponse(responseCode = "404", description = "Araç tipi bulunamadı")
     @PostMapping("/{id}/deactivate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<VehicleType> deactivateVehicleType(
             @Parameter(description = "Araç tipi ID") @PathVariable Long id
     ) {
@@ -101,7 +105,7 @@ public class VehicleTypeController {
     @ApiResponse(responseCode = "200", description = "Araç tipi başarıyla getirildi")
     @ApiResponse(responseCode = "404", description = "Araç tipi bulunamadı")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<VehicleType> getVehicleType(
             @Parameter(description = "Araç tipi ID", example = "1") @PathVariable Long id
     ) {
@@ -118,19 +122,13 @@ public class VehicleTypeController {
     )
     @ApiResponse(responseCode = "200", description = "Araç tipi listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<List<VehicleType>> getAllVehicleTypes(
-            @Parameter(description = "Havuz operatörü ID'ye göre filtrele") @RequestParam(required = false) Long poolOperatorId,
-            @Parameter(description = "Aktiflik durumuna göre filtrele") @RequestParam(required = false) Boolean active
+            @Parameter(description = "Aktiflik durumuna göre filtrele") @RequestParam(required = false) Boolean active,
+            HttpServletRequest httpRequest
     ) {
-        List<VehicleType> vehicleTypes;
-        if (poolOperatorId != null) {
-            vehicleTypes = vehicleTypeService.findByPoolOperator(poolOperatorId, active);
-        } else if (active != null && active) {
-            vehicleTypes = vehicleTypeService.findAllActive();
-        } else {
-            vehicleTypes = vehicleTypeService.findAll();
-        }
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
+        List<VehicleType> vehicleTypes = vehicleTypeService.findByPoolOperator(poolOperatorId, active);
         return ResponseEntity.ok(vehicleTypes);
     }
 
@@ -138,9 +136,6 @@ public class VehicleTypeController {
 
     @Schema(description = "Araç tipi oluşturma request DTO")
     public record CreateVehicleTypeRequest(
-            @Schema(description = "Havuz operatörü ID", example = "1", required = true)
-            Long poolOperatorId,
-
             @Schema(description = "Araç tipi adı", example = "Kamyon (12 ton)", required = true)
             String name,
 

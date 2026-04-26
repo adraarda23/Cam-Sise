@@ -2,6 +2,8 @@ package ardaaydinkilinc.Cam_Sise.logistics.controller;
 
 import ardaaydinkilinc.Cam_Sise.logistics.service.DepotService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.Depot;
+import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -27,6 +29,7 @@ import java.util.List;
 public class DepotController {
 
     private final DepotService depotService;
+    private final JwtUtil jwtUtil;
 
     /**
      * Create a new depot
@@ -38,10 +41,11 @@ public class DepotController {
     @ApiResponse(responseCode = "201", description = "Depo başarıyla oluşturuldu")
     @ApiResponse(responseCode = "400", description = "Geçersiz request parametreleri")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<Depot> createDepot(@RequestBody CreateDepotRequest request) {
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<Depot> createDepot(@RequestBody CreateDepotRequest request, HttpServletRequest httpRequest) {
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
         Depot depot = depotService.createDepot(
-                request.poolOperatorId,
+                poolOperatorId,
                 request.name,
                 request.street,
                 request.city,
@@ -64,7 +68,7 @@ public class DepotController {
     @ApiResponse(responseCode = "200", description = "Araç başarıyla depoya eklendi")
     @ApiResponse(responseCode = "404", description = "Depo veya araç bulunamadı")
     @PostMapping("/{depotId}/vehicles/{vehicleId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Depot> addVehicle(
             @Parameter(description = "Depo ID") @PathVariable Long depotId,
             @Parameter(description = "Araç ID") @PathVariable Long vehicleId
@@ -83,7 +87,7 @@ public class DepotController {
     @ApiResponse(responseCode = "200", description = "Araç başarıyla depodan çıkarıldı")
     @ApiResponse(responseCode = "404", description = "Depo veya araç bulunamadı")
     @DeleteMapping("/{depotId}/vehicles/{vehicleId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Depot> removeVehicle(
             @Parameter(description = "Depo ID") @PathVariable Long depotId,
             @Parameter(description = "Araç ID") @PathVariable Long vehicleId
@@ -102,7 +106,7 @@ public class DepotController {
     @ApiResponse(responseCode = "200", description = "Depo başarıyla getirildi")
     @ApiResponse(responseCode = "404", description = "Depo bulunamadı")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Depot> getDepot(
             @Parameter(description = "Depo ID", example = "1") @PathVariable Long id
     ) {
@@ -119,19 +123,13 @@ public class DepotController {
     )
     @ApiResponse(responseCode = "200", description = "Depo listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<List<Depot>> getAllDepots(
-            @Parameter(description = "Havuz operatörü ID'ye göre filtrele") @RequestParam(required = false) Long poolOperatorId,
-            @Parameter(description = "Aktiflik durumuna göre filtrele") @RequestParam(required = false) Boolean active
+            @Parameter(description = "Aktiflik durumuna göre filtrele") @RequestParam(required = false) Boolean active,
+            HttpServletRequest httpRequest
     ) {
-        List<Depot> depots;
-        if (poolOperatorId != null) {
-            depots = depotService.findByPoolOperator(poolOperatorId, active);
-        } else if (active != null && active) {
-            depots = depotService.findAllActive();
-        } else {
-            depots = depotService.findAll();
-        }
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
+        List<Depot> depots = depotService.findByPoolOperator(poolOperatorId, active);
         return ResponseEntity.ok(depots);
     }
 
@@ -139,9 +137,6 @@ public class DepotController {
 
     @Schema(description = "Depo oluşturma request DTO")
     public record CreateDepotRequest(
-            @Schema(description = "Havuz operatörü ID", example = "1", required = true)
-            Long poolOperatorId,
-
             @Schema(description = "Depo adı", example = "İstanbul Merkez Depo", required = true)
             String name,
 

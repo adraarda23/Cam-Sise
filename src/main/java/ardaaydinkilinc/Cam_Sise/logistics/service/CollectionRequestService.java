@@ -6,9 +6,12 @@ import ardaaydinkilinc.Cam_Sise.inventory.service.FillerStockService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
 import ardaaydinkilinc.Cam_Sise.shared.exception.BusinessRuleViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -283,5 +286,16 @@ public class CollectionRequestService {
     @Transactional(readOnly = true)
     public List<CollectionRequest> findAll() {
         return collectionRequestRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CollectionRequest> findByPoolOperatorId(Long poolOperatorId) {
+        return collectionRequestRepository.findByPoolOperatorId(poolOperatorId);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CollectionRequest> findByPoolOperatorIdPaged(Long poolOperatorId, RequestStatus status, AssetType assetType, int page, int size) {
+        var pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        return PageResponse.from(collectionRequestRepository.findByPoolOperatorIdFiltered(poolOperatorId, status, assetType, pageable));
     }
 }

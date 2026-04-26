@@ -7,8 +7,11 @@ import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Distance;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Duration;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -247,5 +250,16 @@ public class CollectionPlanService {
     @Transactional(readOnly = true)
     public List<CollectionPlan> findAll() {
         return collectionPlanRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CollectionPlan> findByPoolOperatorId(Long poolOperatorId) {
+        return collectionPlanRepository.findByPoolOperatorId(poolOperatorId);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CollectionPlan> findByPoolOperatorIdPaged(Long poolOperatorId, PlanStatus status, LocalDate startDate, LocalDate endDate, int page, int size) {
+        var pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        return PageResponse.from(collectionPlanRepository.findByPoolOperatorIdFiltered(poolOperatorId, status, startDate, endDate, pageable));
     }
 }

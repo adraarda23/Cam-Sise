@@ -32,7 +32,7 @@ public class LossRecordController {
      * Create a new loss record with estimated rate
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<LossRecord> createLossRecord(@RequestBody CreateLossRecordRequest request) {
         Period period = new Period(request.periodStartDate, request.periodEndDate);
         LossRecord record = lossRecordService.createWithEstimate(
@@ -66,7 +66,7 @@ public class LossRecordController {
      * Recalculate estimated rate
      */
     @PutMapping("/{fillerId}/{assetType}/estimated-rate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<LossRecord> recalculateEstimatedRate(
             @PathVariable Long fillerId,
             @PathVariable AssetType assetType,
@@ -109,7 +109,7 @@ public class LossRecordController {
      * Get all loss records for an asset type
      */
     @GetMapping("/asset-type/{assetType}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<List<LossRecord>> getLossRecordsByAssetType(@PathVariable AssetType assetType) {
         List<LossRecord> records = lossRecordService.getLossRecordsByAssetType(assetType);
         return ResponseEntity.ok(records);

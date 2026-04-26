@@ -3,6 +3,8 @@ package ardaaydinkilinc.Cam_Sise.inventory.controller;
 import ardaaydinkilinc.Cam_Sise.inventory.service.FillerStockService;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
+import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,6 +29,7 @@ import java.util.List;
 public class FillerStockController {
 
     private final FillerStockService fillerStockService;
+    private final JwtUtil jwtUtil;
 
     @Operation(
             summary = "Asset girişi kaydet",
@@ -49,7 +52,7 @@ public class FillerStockController {
      * Record asset collection (when pool operator collects assets)
      */
     @PostMapping("/collection")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<FillerStock> recordCollection(@RequestBody RecordCollectionRequest request) {
         FillerStock stock = fillerStockService.recordCollection(
                 request.fillerId,
@@ -64,7 +67,7 @@ public class FillerStockController {
      * Update threshold for a stock
      */
     @PutMapping("/{fillerId}/{assetType}/threshold")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<FillerStock> updateThreshold(
             @PathVariable Long fillerId,
             @PathVariable AssetType assetType,
@@ -78,7 +81,7 @@ public class FillerStockController {
      * Update loss rate for a stock
      */
     @PutMapping("/{fillerId}/{assetType}/loss-rate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<FillerStock> updateLossRate(
             @PathVariable Long fillerId,
             @PathVariable AssetType assetType,
@@ -115,25 +118,29 @@ public class FillerStockController {
      * Get all stocks for a specific asset type
      */
     @GetMapping("/asset-type/{assetType}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<List<FillerStock>> getStocksByAssetType(@PathVariable AssetType assetType) {
-        List<FillerStock> stocks = fillerStockService.getStocksByAssetType(assetType);
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<List<FillerStock>> getStocksByAssetType(@PathVariable AssetType assetType, HttpServletRequest httpRequest) {
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
+        List<FillerStock> stocks = fillerStockService.getAllStocksByPoolOperatorId(poolOperatorId)
+                .stream().filter(s -> s.getAssetType() == assetType).toList();
         return ResponseEntity.ok(stocks);
     }
 
-    /**
-     * Get all stocks in the system
-     */
     @Operation(
             summary = "Tüm stokları listele",
-            description = "Sistemdeki tüm dolumcu stok kayıtlarını listeler. ADMIN ve COMPANY_STAFF tarafından kullanılabilir."
+            description = "Tenant'a ait tüm dolumcu stok kayıtlarını sayfalı listeler."
     )
     @ApiResponse(responseCode = "200", description = "Stok listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<List<FillerStock>> getAllStocks() {
-        List<FillerStock> stocks = fillerStockService.getAllStocks();
-        return ResponseEntity.ok(stocks);
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse<FillerStock>> getAllStocks(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            HttpServletRequest httpRequest
+    ) {
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
+        return ResponseEntity.ok(fillerStockService.findByPoolOperatorIdPaged(poolOperatorId, search, page, size));
     }
 
     // ===== DTOs =====

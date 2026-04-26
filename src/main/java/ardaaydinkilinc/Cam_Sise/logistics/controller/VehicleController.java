@@ -3,6 +3,9 @@ package ardaaydinkilinc.Cam_Sise.logistics.controller;
 import ardaaydinkilinc.Cam_Sise.logistics.service.VehicleService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.Vehicle;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
+import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -28,6 +31,7 @@ import java.util.List;
 public class VehicleController {
 
     private final VehicleService vehicleService;
+    private final JwtUtil jwtUtil;
 
     /**
      * Register a new vehicle
@@ -39,7 +43,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "201", description = "Araç başarıyla kaydedildi")
     @ApiResponse(responseCode = "400", description = "Geçersiz request parametreleri")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Vehicle> registerVehicle(@RequestBody RegisterVehicleRequest request) {
         Vehicle vehicle = vehicleService.registerVehicle(
                 request.depotId,
@@ -59,7 +63,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "Araç başarıyla rotaya atandı")
     @ApiResponse(responseCode = "404", description = "Araç veya plan bulunamadı")
     @PostMapping("/{vehicleId}/assign")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Vehicle> assignToRoute(
             @Parameter(description = "Araç ID") @PathVariable Long vehicleId,
             @RequestBody AssignToRouteRequest request
@@ -84,7 +88,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "Araç durumu başarıyla güncellendi")
     @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @PostMapping("/{vehicleId}/depart")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Vehicle> departFromDepot(
             @Parameter(description = "Araç ID") @PathVariable Long vehicleId
     ) {
@@ -102,7 +106,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "Araç durumu başarıyla güncellendi")
     @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @PostMapping("/{vehicleId}/return")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Vehicle> returnToDepot(
             @Parameter(description = "Araç ID") @PathVariable Long vehicleId
     ) {
@@ -120,7 +124,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "Araç durumu başarıyla güncellendi")
     @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @PutMapping("/{vehicleId}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Vehicle> changeStatus(
             @Parameter(description = "Araç ID") @PathVariable Long vehicleId,
             @RequestBody ChangeStatusRequest request
@@ -139,7 +143,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "Araç başarıyla getirildi")
     @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Vehicle> getVehicle(
             @Parameter(description = "Araç ID", example = "1") @PathVariable Long id
     ) {
@@ -157,7 +161,7 @@ public class VehicleController {
     @ApiResponse(responseCode = "200", description = "Araç başarıyla getirildi")
     @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
     @GetMapping("/plate/{plateNumber}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Vehicle> getVehicleByPlate(
             @Parameter(description = "Plaka numarası", example = "34ABC123") @PathVariable String plateNumber
     ) {
@@ -174,20 +178,16 @@ public class VehicleController {
     )
     @ApiResponse(responseCode = "200", description = "Araç listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<List<Vehicle>> getAllVehicles(
-            @Parameter(description = "Depo ID'ye göre filtrele") @RequestParam(required = false) Long depotId,
-            @Parameter(description = "Araç durumuna göre filtrele") @RequestParam(required = false) VehicleStatus status
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<PageResponse<Vehicle>> getAllVehicles(
+            @Parameter(description = "Araç durumuna göre filtrele") @RequestParam(required = false) VehicleStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            HttpServletRequest httpRequest
     ) {
-        List<Vehicle> vehicles;
-        if (depotId != null) {
-            vehicles = vehicleService.findByDepot(depotId, status);
-        } else if (status != null) {
-            vehicles = vehicleService.findByStatus(status);
-        } else {
-            vehicles = vehicleService.findAll();
-        }
-        return ResponseEntity.ok(vehicles);
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
+        return ResponseEntity.ok(vehicleService.findByPoolOperatorIdPaged(poolOperatorId, status, search, page, size));
     }
 
     // ===== DTOs =====

@@ -26,7 +26,7 @@ public class AuthService {
             throw new AuthenticationException("Hatalı şifre");
         }
 
-        String token = jwtUtil.generateToken(user.getUsername(), user.getRole().name());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getRole().name(), user.getPoolOperatorId());
 
         return LoginResponse.builder()
                 .token(token)

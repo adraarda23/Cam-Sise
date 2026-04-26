@@ -8,8 +8,11 @@ import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.VehicleRepository;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -223,5 +226,17 @@ public class VehicleService {
     @Transactional(readOnly = true)
     public List<Vehicle> findAll() {
         return vehicleRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Vehicle> findByPoolOperatorId(Long poolOperatorId) {
+        return vehicleRepository.findByPoolOperatorId(poolOperatorId);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<Vehicle> findByPoolOperatorIdPaged(Long poolOperatorId, VehicleStatus status, String search, int page, int size) {
+        String searchParam = (search == null || search.isBlank()) ? "" : search;
+        var pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        return PageResponse.from(vehicleRepository.findByPoolOperatorIdFiltered(poolOperatorId, status, searchParam, pageable));
     }
 }

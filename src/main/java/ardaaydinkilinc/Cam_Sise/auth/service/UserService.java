@@ -9,6 +9,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+
+import java.util.List;
+import java.util.Optional;
+
 /**
  * Application service for User aggregate.
  * Coordinates domain operations and publishes events.
@@ -35,6 +42,24 @@ public class UserService {
             Long fillerId
     ) {
         log.info("Registering new user: username={}, role={}", username, role);
+
+        // CUSTOMER upsert: aynı dolumcuya zaten aktif hesap varsa bilgileri güncelle
+        if (role == Role.CUSTOMER && fillerId != null) {
+            Optional<User> existing = userRepository.findByFillerIdAndActiveTrue(fillerId);
+            if (existing.isPresent()) {
+                User user = existing.get();
+                // username değiştiyse başka biri kullanıyor mu kontrolü
+                if (!user.getUsername().equals(username) && userRepository.existsByUsername(username)) {
+                    throw new IllegalArgumentException("Username already exists: " + username);
+                }
+                user.updateUsername(username);
+                user.updateFullName(fullName);
+                user.updatePassword(passwordEncoder.encode(rawPassword));
+                user = userRepository.save(user);
+                log.info("Customer credentials overridden: id={}, fillerId={}", user.getId(), fillerId);
+                return user;
+            }
+        }
 
         // Check if username already exists
         if (userRepository.existsByUsername(username)) {
@@ -103,6 +128,36 @@ public class UserService {
     }
 
     /**
+     * Update user name and optionally password.
+     */
+    public User updateUser(Long userId, String fullName, String newRawPassword) {
+        log.info("Updating user: userId={}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+
+        if (fullName != null && !fullName.isBlank()) {
+            user.updateFullName(fullName);
+        }
+        if (newRawPassword != null && !newRawPassword.isBlank()) {
+            user.updatePassword(passwordEncoder.encode(newRawPassword));
+        }
+
+        user = userRepository.save(user);
+        log.info("User updated: userId={}", userId);
+        return user;
+    }
+
+    /**
+     * Find user by ID.
+     */
+    @Transactional(readOnly = true)
+    public User findById(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+    }
+
+    /**
      * Find user by username.
      */
     @Transactional(readOnly = true)
@@ -118,5 +173,36 @@ public class UserService {
     public User findActiveUserByUsername(String username) {
         return userRepository.findByUsernameAndActiveTrue(username)
                 .orElseThrow(() -> new IllegalArgumentException("Active user not found: " + username));
+    }
+
+    /**
+     * Find all users belonging to a pool operator (tenant-scoped).
+     */
+    @Transactional(readOnly = true)
+    public List<User> findByPoolOperatorId(Long poolOperatorId) {
+        return userRepository.findByPoolOperatorId(poolOperatorId);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<User> findByPoolOperatorIdPaged(Long poolOperatorId, Role role, String search, int page, int size) {
+        String searchParam = (search == null || search.isBlank()) ? "" : search;
+        var pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        return PageResponse.from(userRepository.findByPoolOperatorIdAndRoleFiltered(poolOperatorId, role, searchParam, pageable));
+    }
+
+    /**
+     * Deactivate a user (soft delete).
+     */
+    public User deactivateUser(Long userId) {
+        log.info("Deactivating user: userId={}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+
+        user.deactivate();
+        user = userRepository.save(user);
+
+        log.info("User deactivated: userId={}", userId);
+        return user;
     }
 }

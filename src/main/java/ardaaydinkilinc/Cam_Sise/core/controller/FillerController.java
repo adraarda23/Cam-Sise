@@ -2,6 +2,8 @@ package ardaaydinkilinc.Cam_Sise.core.controller;
 
 import ardaaydinkilinc.Cam_Sise.core.service.FillerService;
 import ardaaydinkilinc.Cam_Sise.core.domain.Filler;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
+import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,8 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.List;
 
 /**
  * REST API for Filler management.
@@ -29,6 +31,7 @@ import java.util.List;
 public class FillerController {
 
     private final FillerService fillerService;
+    private final JwtUtil jwtUtil;
 
     /**
      * Register a new filler
@@ -40,10 +43,15 @@ public class FillerController {
     @ApiResponse(responseCode = "201", description = "Dolumcu başarıyla kaydedildi")
     @ApiResponse(responseCode = "400", description = "Geçersiz request parametreleri")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<Filler> registerFiller(@RequestBody RegisterFillerRequest request) {
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<Filler> registerFiller(@RequestBody RegisterFillerRequest request,
+                                                  HttpServletRequest httpRequest) {
+        String authHeader = httpRequest.getHeader("Authorization");
+        String token = authHeader.substring(7);
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(token);
+
         Filler filler = fillerService.registerFiller(
-                request.poolOperatorId,
+                poolOperatorId,
                 request.name,
                 request.street,
                 request.city,
@@ -87,20 +95,45 @@ public class FillerController {
     )
     @ApiResponse(responseCode = "200", description = "Dolumcu listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<List<Filler>> getAllFillers(
-            @Parameter(description = "Havuz operatörü ID'ye göre filtrele") @RequestParam(required = false) Long poolOperatorId,
-            @Parameter(description = "Aktiflik durumuna göre filtrele") @RequestParam(required = false) Boolean active
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<PageResponse<Filler>> getAllFillers(
+            @Parameter(description = "Aktiflik durumuna göre filtrele") @RequestParam(required = false) Boolean active,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            HttpServletRequest httpRequest
     ) {
-        List<Filler> fillers;
-        if (poolOperatorId != null) {
-            fillers = fillerService.findByPoolOperator(poolOperatorId, active);
-        } else if (active != null && active) {
-            fillers = fillerService.findAllActive();
-        } else {
-            fillers = fillerService.findAll();
-        }
-        return ResponseEntity.ok(fillers);
+        String token = httpRequest.getHeader("Authorization").substring(7);
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(token);
+        return ResponseEntity.ok(fillerService.findByPoolOperatorPaged(poolOperatorId, active, search, page, size));
+    }
+
+    /**
+     * Full update of a filler
+     */
+    @Operation(summary = "Dolumcu bilgilerini güncelle", description = "Ad, adres, iletişim ve konum bilgilerini günceller.")
+    @ApiResponse(responseCode = "200", description = "Dolumcu başarıyla güncellendi")
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<Filler> updateFiller(
+            @Parameter(description = "Dolumcu ID") @PathVariable Long id,
+            @RequestBody UpdateFillerRequest request
+    ) {
+        Filler filler = fillerService.updateFiller(
+                id,
+                request.name,
+                request.street,
+                request.city,
+                request.province,
+                request.postalCode,
+                request.country,
+                request.latitude,
+                request.longitude,
+                request.contactPhone,
+                request.contactEmail,
+                request.contactPersonName
+        );
+        return ResponseEntity.ok(filler);
     }
 
     /**
@@ -113,7 +146,7 @@ public class FillerController {
     @ApiResponse(responseCode = "200", description = "Dolumcu başarıyla aktifleştirildi")
     @ApiResponse(responseCode = "404", description = "Dolumcu bulunamadı")
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Filler> activateFiller(
             @Parameter(description = "Dolumcu ID") @PathVariable Long id
     ) {
@@ -131,7 +164,7 @@ public class FillerController {
     @ApiResponse(responseCode = "200", description = "Dolumcu başarıyla devre dışı bırakıldı")
     @ApiResponse(responseCode = "404", description = "Dolumcu bulunamadı")
     @PostMapping("/{id}/deactivate")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Filler> deactivateFiller(
             @Parameter(description = "Dolumcu ID") @PathVariable Long id
     ) {
@@ -149,7 +182,7 @@ public class FillerController {
     @ApiResponse(responseCode = "200", description = "İletişim bilgileri başarıyla güncellendi")
     @ApiResponse(responseCode = "404", description = "Dolumcu bulunamadı")
     @PutMapping("/{id}/contact")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Filler> updateContactInfo(
             @Parameter(description = "Dolumcu ID") @PathVariable Long id,
             @RequestBody UpdateContactInfoRequest request
@@ -173,7 +206,7 @@ public class FillerController {
     @ApiResponse(responseCode = "200", description = "Konum bilgisi başarıyla güncellendi")
     @ApiResponse(responseCode = "404", description = "Dolumcu bulunamadı")
     @PutMapping("/{id}/location")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<Filler> updateLocation(
             @Parameter(description = "Dolumcu ID") @PathVariable Long id,
             @RequestBody UpdateLocationRequest request
@@ -186,9 +219,6 @@ public class FillerController {
 
     @Schema(description = "Dolumcu kayıt request DTO")
     public record RegisterFillerRequest(
-            @Schema(description = "Havuz operatörü ID", example = "1", required = true)
-            Long poolOperatorId,
-
             @Schema(description = "Dolumcu adı", example = "Coca-Cola Bursa Dolum", required = true)
             String name,
 
@@ -230,6 +260,21 @@ public class FillerController {
 
             @Schema(description = "Vergi kimlik numarası", example = "1234567890", required = true)
             String taxId
+    ) {}
+
+    @Schema(description = "Dolumcu güncelleme request DTO")
+    public record UpdateFillerRequest(
+            String name,
+            String street,
+            String city,
+            String province,
+            String postalCode,
+            String country,
+            Double latitude,
+            Double longitude,
+            String contactPhone,
+            String contactEmail,
+            String contactPersonName
     ) {}
 
     @Schema(description = "Dolumcu iletişim güncelleme request DTO")

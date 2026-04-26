@@ -42,7 +42,7 @@ public class RouteOptimizationController {
     @ApiResponse(responseCode = "201", description = "Rota planı/planları başarıyla oluşturuldu")
     @ApiResponse(responseCode = "400", description = "Onaylı talep bulunamadı veya optimizasyon başarısız")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<MultiVehicleOptimizeResponse> generateOptimizedPlan(
             @RequestBody OptimizeRouteRequest request
     ) {
@@ -73,7 +73,7 @@ public class RouteOptimizationController {
     @ApiResponse(responseCode = "201", description = "Rota planı başarıyla oluşturuldu")
     @ApiResponse(responseCode = "400", description = "Geçersiz talepler veya optimizasyon başarısız")
     @PostMapping("/custom")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionPlan> generatePlanForRequests(
             @RequestBody CustomOptimizeRequest request
     ) {
@@ -121,7 +121,7 @@ public class RouteOptimizationController {
     @ApiResponse(responseCode = "201", description = "Rota planları başarıyla oluşturuldu")
     @ApiResponse(responseCode = "400", description = "Optimizasyon başarısız")
     @PostMapping("/multi-vehicle")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<MultiVehicleOptimizeResponse> generateMultiVehiclePlan(
             @RequestBody MultiVehicleOptimizeRequest request
     ) {

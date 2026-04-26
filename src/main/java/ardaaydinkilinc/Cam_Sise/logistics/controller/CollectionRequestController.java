@@ -4,6 +4,9 @@ import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionRequestService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
+import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -29,6 +32,7 @@ import java.util.List;
 public class CollectionRequestController {
 
     private final CollectionRequestService collectionRequestService;
+    private final JwtUtil jwtUtil;
 
     /**
      * Create a manual collection request (initiated by customer)
@@ -60,7 +64,7 @@ public class CollectionRequestController {
     @Operation(summary = "Toplama talebini onayla", description = "COMPANY_STAFF tarafından toplama talebini onaylar. Onaylanan talepler rota optimizasyonuna dahil edilir.")
     @ApiResponse(responseCode = "200", description = "Talep başarıyla onaylandı")
     @PostMapping("/{requestId}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionRequest> approveRequest(
             @Parameter(description = "Collection request ID") @PathVariable Long requestId,
             @RequestBody ApproveRequestRequest request
@@ -73,7 +77,7 @@ public class CollectionRequestController {
      * Reject a collection request
      */
     @PostMapping("/{requestId}/reject")
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<CollectionRequest> rejectRequest(
             @PathVariable Long requestId,
             @RequestBody RejectRequestRequest request
@@ -108,23 +112,16 @@ public class CollectionRequestController {
     @Operation(summary = "Tüm toplama taleplerini listele", description = "Filtrelemelerle tüm toplama taleplerini listeler. COMPANY_STAFF tüm talepleri görebilir.")
     @ApiResponse(responseCode = "200", description = "Talep listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF')")
-    public ResponseEntity<List<CollectionRequest>> getAllRequests(
-            @Parameter(description = "Dolumcu ID'ye göre filtrele") @RequestParam(required = false) Long fillerId,
-            @Parameter(description = "Duruma göre filtrele (PENDING, APPROVED, REJECTED, etc.)") @RequestParam(required = false) RequestStatus status,
-            @Parameter(description = "Asset tipine göre filtrele (PALLET, SEPARATOR)") @RequestParam(required = false) AssetType assetType
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<PageResponse<CollectionRequest>> getAllRequests(
+            @Parameter(description = "Duruma göre filtrele") @RequestParam(required = false) RequestStatus status,
+            @Parameter(description = "Asset tipine göre filtrele") @RequestParam(required = false) AssetType assetType,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            HttpServletRequest httpRequest
     ) {
-        List<CollectionRequest> requests;
-        if (fillerId != null) {
-            requests = collectionRequestService.findByFiller(fillerId, status);
-        } else if (status != null) {
-            requests = collectionRequestService.findByStatus(status);
-        } else if (assetType != null) {
-            requests = collectionRequestService.findByAssetType(assetType);
-        } else {
-            requests = collectionRequestService.findAll();
-        }
-        return ResponseEntity.ok(requests);
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
+        return ResponseEntity.ok(collectionRequestService.findByPoolOperatorIdPaged(poolOperatorId, status, assetType, page, size));
     }
 
     /**

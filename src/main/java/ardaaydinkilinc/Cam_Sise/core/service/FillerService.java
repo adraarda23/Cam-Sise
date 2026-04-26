@@ -6,8 +6,11 @@ import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Address;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.ContactInfo;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.GeoCoordinates;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.TaxId;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,6 +106,39 @@ public class FillerService {
     }
 
     /**
+     * Full update of a filler (name, address, contact, location).
+     */
+    public Filler updateFiller(
+            Long fillerId,
+            String name,
+            String street,
+            String city,
+            String province,
+            String postalCode,
+            String country,
+            Double latitude,
+            Double longitude,
+            String phone,
+            String email,
+            String contactPersonName
+    ) {
+        log.info("Updating filler: id={}", fillerId);
+
+        Filler filler = fillerRepository.findById(fillerId)
+                .orElseThrow(() -> new IllegalArgumentException("Filler not found: " + fillerId));
+
+        filler.updateName(name);
+        filler.updateAddress(new Address(street, city, province, postalCode, country));
+        filler.updateContactInfo(new ContactInfo(phone, email, contactPersonName));
+        filler.updateLocation(new GeoCoordinates(latitude, longitude));
+
+        filler = fillerRepository.save(filler);
+
+        log.info("Filler updated successfully: id={}", fillerId);
+        return filler;
+    }
+
+    /**
      * Update filler contact information.
      */
     public Filler updateContactInfo(
@@ -155,7 +191,7 @@ public class FillerService {
     }
 
     /**
-     * Find all fillers for a pool operator.
+     * Find all fillers for a pool operator (non-paginated, used internally).
      */
     @Transactional(readOnly = true)
     public List<Filler> findByPoolOperator(Long poolOperatorId, Boolean active) {
@@ -163,6 +199,16 @@ public class FillerService {
             return fillerRepository.findByPoolOperatorIdAndActive(poolOperatorId, active);
         }
         return fillerRepository.findByPoolOperatorId(poolOperatorId);
+    }
+
+    /**
+     * Find fillers with server-side pagination and optional active filter.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<Filler> findByPoolOperatorPaged(Long poolOperatorId, Boolean active, String search, int page, int size) {
+        String searchParam = (search == null || search.isBlank()) ? "" : search;
+        var pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        return PageResponse.from(fillerRepository.findByPoolOperatorIdFiltered(poolOperatorId, active, searchParam, pageable));
     }
 
     /**

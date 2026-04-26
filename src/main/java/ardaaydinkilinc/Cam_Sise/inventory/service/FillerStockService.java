@@ -4,8 +4,11 @@ import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.LossRate;
 import ardaaydinkilinc.Cam_Sise.inventory.repository.FillerStockRepository;
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -171,5 +174,17 @@ public class FillerStockService {
     @Transactional(readOnly = true)
     public List<FillerStock> getAllStocks() {
         return fillerStockRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FillerStock> getAllStocksByPoolOperatorId(Long poolOperatorId) {
+        return fillerStockRepository.findByPoolOperatorId(poolOperatorId);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<FillerStock> findByPoolOperatorIdPaged(Long poolOperatorId, String search, int page, int size) {
+        String searchParam = (search == null || search.isBlank()) ? "" : search;
+        var pageable = PageRequest.of(page, size, Sort.by("id").descending());
+        return PageResponse.from(fillerStockRepository.findByPoolOperatorIdFiltered(poolOperatorId, searchParam, pageable));
     }
 }
