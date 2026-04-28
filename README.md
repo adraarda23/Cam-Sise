@@ -498,17 +498,17 @@ src/
 - ✅ Toplama planı oluşturma ve kalıcı saklama
 - ✅ Event Handler (FillerRegistered → FillerStock oluştur)
 - ✅ Test senaryoları (test_multi_vehicle_cvrp.sh, demo_multi_stop_route.sh)
-- ⬜ Integration tests (multi-vehicle optimization end-to-end test)
-- ⬜ Swagger dokümantasyonu — logistics endpoint'leri
+- ✅ Integration tests (multi-vehicle optimization end-to-end test)
+- ✅ Swagger dokümantasyonu — logistics endpoint'leri
 
 ### Hafta 4 — Frontend Panel ve Tez Yazımı
 
-- ⬜ Frontend iskeleti (framework TBD) + routing + JWT interceptor
-- ⬜ Login ekranı ve rol bazlı yönlendirme
-- ⬜ ADMIN paneli — kullanıcı yönetimi
-- ⬜ COMPANY_STAFF dashboard — envanter özeti, talep havuzu, rota ekranı
-- ⬜ CUSTOMER dashboard — stok, zaiyat, manuel talep formu
-- ⬜ Harita entegrasyonu — Gemlik depo + dolumcu lokasyonları + aktif rota
+- ✅ Frontend iskeleti (framework TBD) + routing + JWT interceptor
+- ✅ Login ekranı ve rol bazlı yönlendirme
+- ✅ ADMIN paneli — kullanıcı yönetimi
+- ✅ COMPANY_STAFF dashboard — envanter özeti, talep havuzu, rota ekranı
+- ✅ CUSTOMER dashboard — stok, zaiyat, manuel talep formu
+- ✅ Harita entegrasyonu — Gemlik depo + dolumcu lokasyonları + aktif rota
 - ⬜ Demo senaryosu hazırlığı
 - ⬜ Tez dökümanı yazımı
 
