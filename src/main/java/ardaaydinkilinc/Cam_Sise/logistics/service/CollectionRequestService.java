@@ -6,6 +6,7 @@ import ardaaydinkilinc.Cam_Sise.inventory.service.FillerStockService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
+import ardaaydinkilinc.Cam_Sise.settings.service.CompanySettingsService;
 import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
 import ardaaydinkilinc.Cam_Sise.shared.exception.BusinessRuleViolationException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class CollectionRequestService {
 
     private final CollectionRequestRepository collectionRequestRepository;
     private final FillerStockService fillerStockService;
+    private final CompanySettingsService companySettingsService;
 
     /**
      * Create an automatic collection request (triggered by threshold).
@@ -58,10 +60,19 @@ public class CollectionRequestService {
             Long fillerId,
             AssetType assetType,
             Integer estimatedQuantity,
-            Long requestingUserId
+            Long requestingUserId,
+            Long poolOperatorId
     ) {
         log.info("Creating manual collection request: fillerId={}, assetType={}, quantity={}, userId={}",
                 fillerId, assetType, estimatedQuantity, requestingUserId);
+
+        // Enforce minimum request quantity
+        int minQty = companySettingsService.getSettings(poolOperatorId).getMinQty(assetType);
+        if (estimatedQuantity < minQty) {
+            throw new BusinessRuleViolationException(
+                "Minimum toplama talebi " + minQty + " adettir. Talep edilen: " + estimatedQuantity
+            );
+        }
 
         // Get current stock
         FillerStock stock = fillerStockService.getStock(fillerId, assetType);

@@ -157,6 +157,7 @@ public class RouteOptimizationService {
      * Calculate the minimum number of vehicles needed to carry the total demand.
      */
     private int calculateNeededVehicles(Capacity totalDemand, Capacity vehicleCapacity) {
+        // 0 capacity in a dimension means unconstrained — treat as 1 vehicle needed for that dimension
         int byPallets = vehicleCapacity.pallets() > 0
                 ? (int) Math.ceil((double) totalDemand.pallets() / vehicleCapacity.pallets()) : 1;
         int bySeparators = vehicleCapacity.separators() > 0
@@ -256,6 +257,7 @@ public class RouteOptimizationService {
                 .collect(Collectors.groupingBy(CollectionRequest::getFillerId));
 
         List<CVRPOptimizer.CollectionNode> nodes = new ArrayList<>();
+        List<String> invalidLocationFillers = new ArrayList<>();
 
         // Create ONE node per filler with combined demand (pallets + separators)
         for (Map.Entry<Long, List<CollectionRequest>> entry : requestsByFiller.entrySet()) {
@@ -264,6 +266,14 @@ public class RouteOptimizationService {
 
             Filler filler = fillerRepository.findById(fillerId)
                     .orElseThrow(() -> new IllegalArgumentException("Filler not found: " + fillerId));
+
+            // Validate location — null or (0,0) means the filler was never geocoded
+            var loc = filler.getLocation();
+            if (loc == null || (loc.latitude() == 0.0 && loc.longitude() == 0.0)) {
+                log.warn("Filler '{}' (ID: {}) has no valid location — skipping from route optimization", filler.getName(), fillerId);
+                invalidLocationFillers.add(filler.getName() + " (ID: " + fillerId + ")");
+                continue;
+            }
 
             // Sum all pallets and separators for this filler
             int totalPallets = fillerRequests.stream()
@@ -280,12 +290,22 @@ public class RouteOptimizationService {
 
             nodes.add(new CVRPOptimizer.CollectionNode(
                     filler.getId(),
-                    filler.getLocation(),
+                    loc,
                     combinedDemand
             ));
 
             log.debug("Merged {} requests from filler {} into single node: {} pallets, {} separators",
                     fillerRequests.size(), fillerId, totalPallets, totalSeparators);
+        }
+
+        if (!invalidLocationFillers.isEmpty()) {
+            if (nodes.isEmpty()) {
+                throw new IllegalStateException(
+                    "Rota optimizasyonu başlatılamadı: Aşağıdaki dolumcularda geçerli konum bilgisi bulunmuyor. " +
+                    "Lütfen dolumcu kayıtlarını güncelleyin: " + String.join(", ", invalidLocationFillers)
+                );
+            }
+            log.warn("Geçersiz konumlu {} dolumcu optimizasyon dışı bırakıldı: {}", invalidLocationFillers.size(), invalidLocationFillers);
         }
 
         return nodes;

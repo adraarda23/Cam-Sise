@@ -17,11 +17,22 @@ public record Capacity(
     }
 
     /**
-     * Check if this capacity can accommodate the required capacity
+     * Check if this capacity can accommodate the required capacity (strict: 0 means 0 available).
      */
     public boolean canAccommodate(Capacity required) {
         return this.pallets >= required.pallets &&
                 this.separators >= required.separators;
+    }
+
+    /**
+     * Routing check: 0 capacity in a dimension means that dimension is unconstrained.
+     * Used by route optimizer so vehicle types configured with only one dimension
+     * don't incorrectly exclude all nodes.
+     */
+    public boolean canRouteWith(Capacity demand) {
+        boolean palletsOk = this.pallets == 0 || this.pallets >= demand.pallets();
+        boolean separatorsOk = this.separators == 0 || this.separators >= demand.separators();
+        return palletsOk && separatorsOk;
     }
 
     /**

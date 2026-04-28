@@ -45,15 +45,18 @@ public class CollectionRequestController {
     @ApiResponse(responseCode = "400", description = "Geçersiz request parametreleri")
     @PostMapping("/manual")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF', 'CUSTOMER')")
-    public ResponseEntity<CollectionRequest> createManualRequest(@RequestBody CreateManualRequestRequest request) {
-        // Use null for requestingUserId if not provided (can be enhanced with @AuthenticationPrincipal later)
+    public ResponseEntity<CollectionRequest> createManualRequest(
+            @RequestBody CreateManualRequestRequest request,
+            HttpServletRequest httpRequest) {
         Long requestingUserId = request.requestingUserId != null ? request.requestingUserId : 1L;
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
 
         CollectionRequest collectionRequest = collectionRequestService.createManual(
                 request.fillerId,
                 request.assetType,
                 request.estimatedQuantity,
-                requestingUserId
+                requestingUserId,
+                poolOperatorId
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(collectionRequest);
     }

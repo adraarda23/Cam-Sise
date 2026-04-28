@@ -60,13 +60,13 @@ public class CVRPOptimizer {
         log.info("Starting CVRP optimization: requests={}, vehicleCapacity={}",
                 requests.size(), vehicleCapacity.formatted());
 
-        // Filter requests that fit within vehicle capacity
+        // Filter requests that fit within vehicle capacity (0 in a dimension = unconstrained)
         List<CollectionNode> feasibleRequests = requests.stream()
-                .filter(req -> vehicleCapacity.canAccommodate(req.demand()))
+                .filter(req -> vehicleCapacity.canRouteWith(req.demand()))
                 .collect(Collectors.toList());
 
         if (feasibleRequests.isEmpty()) {
-            log.warn("No feasible requests within vehicle capacity");
+            log.warn("No feasible requests within vehicle capacity: capacity={}", vehicleCapacity.formatted());
             return new RouteSolution(Collections.emptyList(), 0.0, new Capacity(0, 0));
         }
 
@@ -156,7 +156,7 @@ public class CVRPOptimizer {
                     CollectionNode node = requests.get(i);
                     Capacity potentialLoad = currentLoad.add(node.demand());
 
-                    if (vehicleCapacity.canAccommodate(potentialLoad)) {
+                    if (vehicleCapacity.canRouteWith(potentialLoad)) {
                         double distance = distanceMatrix[currentIndex][i + 1];
                         if (distance < minDistance) {
                             minDistance = distance;
@@ -406,6 +406,8 @@ public class CVRPOptimizer {
         }
 
         // Step 5: Convert to RouteSolution and apply 2-opt
+        // Constraint violations are logged as warnings but do NOT discard the route —
+        // the caller decides whether the route is acceptable for their operation.
         List<RouteSolution> solutions = new ArrayList<>();
         for (Route route : routes) {
             List<CollectionNode> optimizedRoute = twoOptImprovement(depot, route.nodes, distanceMatrix);
@@ -414,15 +416,12 @@ public class CVRPOptimizer {
                     .map(CollectionNode::demand)
                     .reduce(new Capacity(0, 0), Capacity::add);
 
-            // Validate constraints
             int duration = routeConstraints.calculateTotalDuration(distance, optimizedRoute.size());
-            if (routeConstraints.isDistanceAcceptable(distance) &&
-                    routeConstraints.isDurationAcceptable(duration)) {
-                solutions.add(new RouteSolution(optimizedRoute, distance, load));
-            } else {
-                log.warn("Route violates constraints: distance={} km, duration={} min",
+            if (!routeConstraints.isDistanceAcceptable(distance) || !routeConstraints.isDurationAcceptable(duration)) {
+                log.warn("Route exceeds soft constraints (distance={} km, duration={} min) — included anyway",
                         String.format("%.2f", distance), duration);
             }
+            solutions.add(new RouteSolution(optimizedRoute, distance, load));
         }
 
         return solutions;
@@ -470,9 +469,9 @@ public class CVRPOptimizer {
             List<CollectionNode> requests,
             double savingAmount
     ) {
-        // Check capacity
+        // Check capacity (0 in a dimension = unconstrained)
         Capacity combinedLoad = r1.load.add(r2.load);
-        if (!vehicleCapacity.canAccommodate(combinedLoad)) {
+        if (!vehicleCapacity.canRouteWith(combinedLoad)) {
             return false;
         }
 
