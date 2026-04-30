@@ -1,5 +1,6 @@
 package ardaaydinkilinc.Cam_Sise.chat;
 
+import ardaaydinkilinc.Cam_Sise.auth.domain.Role;
 import ardaaydinkilinc.Cam_Sise.auth.domain.User;
 import ardaaydinkilinc.Cam_Sise.auth.repository.UserRepository;
 import ardaaydinkilinc.Cam_Sise.core.domain.Filler;
@@ -7,8 +8,11 @@ import ardaaydinkilinc.Cam_Sise.core.repository.FillerRepository;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.inventory.repository.FillerStockRepository;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionRequestService;
 import ardaaydinkilinc.Cam_Sise.settings.domain.CompanySettings;
@@ -38,11 +42,17 @@ public class ChatService {
     private final FillerStockRepository fillerStockRepository;
     private final CollectionRequestRepository collectionRequestRepository;
     private final CollectionRequestService collectionRequestService;
+    private final CollectionPlanRepository collectionPlanRepository;
     private final CompanySettingsService companySettingsService;
     private final ObjectMapper objectMapper;
 
     public String chat(String username, Long poolOperatorId, String message, List<ChatRequest.MessagePair> history) {
         User user = userRepository.findByUsernameAndActiveTrue(username).orElse(null);
+
+        if (user != null && user.getRole() == Role.COMPANY_STAFF) {
+            String systemPrompt = buildStaffSystemPrompt(poolOperatorId);
+            return geminiService.chat(message, history, systemPrompt);
+        }
 
         if (user == null || user.getFillerId() == null) {
             return geminiService.chat(message, history, buildBasicSystemPrompt());
@@ -189,7 +199,13 @@ public class ChatService {
 
     public String buildWelcomeMessage(String username, Long poolOperatorId) {
         User user = userRepository.findByUsernameAndActiveTrue(username).orElse(null);
-        if (user == null || user.getFillerId() == null) {
+        if (user == null) {
+            return "Merhaba! Size nasıl yardımcı olabilirim?";
+        }
+        if (user.getRole() == Role.COMPANY_STAFF) {
+            return buildStaffWelcomeMessage(user.getFullName(), poolOperatorId);
+        }
+        if (user.getFillerId() == null) {
             return "Merhaba! Size nasıl yardımcı olabilirim?";
         }
 
@@ -231,6 +247,75 @@ public class ChatService {
                 sepCurrent, sepCurrent - sepInActive,
                 settings.getMinPalletRequestQty(), settings.getMinSeparatorRequestQty()
         );
+    }
+
+    private String buildStaffWelcomeMessage(String fullName, Long poolOperatorId) {
+        List<CollectionRequest> allRequests = collectionRequestRepository.findByPoolOperatorId(poolOperatorId);
+        List<CollectionPlan> allPlans = collectionPlanRepository.findByPoolOperatorId(poolOperatorId);
+        List<FillerStock> allStocks = fillerStockRepository.findByPoolOperatorId(poolOperatorId);
+
+        long pending = allRequests.stream().filter(r -> r.getStatus() == RequestStatus.PENDING).count();
+        long approved = allRequests.stream().filter(r -> r.getStatus() == RequestStatus.APPROVED).count();
+        long activePlans = allPlans.stream()
+                .filter(p -> p.getStatus() == PlanStatus.ASSIGNED || p.getStatus() == PlanStatus.IN_PROGRESS).count();
+        long lowStockFillers = allStocks.stream()
+                .filter(s -> s.getCurrentQuantity() >= s.getThresholdQuantity()).count();
+        long totalFillers = allStocks.stream().map(FillerStock::getFillerId).distinct().count();
+
+        return """
+                Merhaba, **%s**! 👋
+
+                **Sistem Özeti:**
+                - 📋 Bekleyen talep: %d | Onaylı: %d
+                - 🚛 Aktif plan: %d
+                - ⚠️ Eşik aşan dolumcu: %d / %d
+
+                **Yapabilecekleriniz:**
+                - Talep, plan ve stok durumu sorgulama
+                - Belirli bir dolumcu hakkında bilgi alma
+                - Sistem istatistikleri ve özet bilgiler
+
+                Nasıl yardımcı olabilirim?
+                """.formatted(fullName, pending, approved, activePlans, lowStockFillers, totalFillers);
+    }
+
+    private String buildStaffSystemPrompt(Long poolOperatorId) {
+        List<CollectionRequest> allRequests = collectionRequestRepository.findByPoolOperatorId(poolOperatorId);
+        List<CollectionPlan> allPlans = collectionPlanRepository.findByPoolOperatorId(poolOperatorId);
+        List<FillerStock> allStocks = fillerStockRepository.findByPoolOperatorId(poolOperatorId);
+
+        long pending = allRequests.stream().filter(r -> r.getStatus() == RequestStatus.PENDING).count();
+        long approved = allRequests.stream().filter(r -> r.getStatus() == RequestStatus.APPROVED).count();
+        long scheduled = allRequests.stream().filter(r -> r.getStatus() == RequestStatus.SCHEDULED).count();
+        long completed = allRequests.stream().filter(r -> r.getStatus() == RequestStatus.COMPLETED).count();
+        long activePlans = allPlans.stream()
+                .filter(p -> p.getStatus() == PlanStatus.ASSIGNED || p.getStatus() == PlanStatus.IN_PROGRESS).count();
+        long completedPlans = allPlans.stream().filter(p -> p.getStatus() == PlanStatus.COMPLETED).count();
+        long totalPalletStock = allStocks.stream().filter(s -> s.getAssetType() == AssetType.PALLET)
+                .mapToLong(FillerStock::getCurrentQuantity).sum();
+        long totalSepStock = allStocks.stream().filter(s -> s.getAssetType() == AssetType.SEPARATOR)
+                .mapToLong(FillerStock::getCurrentQuantity).sum();
+        long lowStockFillers = allStocks.stream()
+                .filter(s -> s.getCurrentQuantity() >= s.getThresholdQuantity()).count();
+        long totalFillers = allStocks.stream().map(FillerStock::getFillerId).distinct().count();
+
+        return """
+                Sen Cam-Sise Palet Yönetim Sistemi'nin operasyon asistanısın.
+                Şu an COMPANY_STAFF (operasyon personeli) ile konuşuyorsun.
+                Türkçe yanıt ver. Kısa ve net ol.
+
+                SİSTEM DURUMU:
+                - Talepler: %d beklemede, %d onaylı, %d planlandı, %d tamamlandı
+                - Planlar: %d aktif, %d tamamlandı
+                - Toplam stok: %d palet, %d ayırıcı
+                - Eşik aşan dolumcu: %d / %d
+
+                Personel sistemi yönetir, sorgular sorar ama chat üzerinden talep oluşturmaz.
+                Stok, talep durumu, plan bilgileri gibi sorularda yukarıdaki verileri kullan.
+                """.formatted(pending, approved, scheduled, completed,
+                activePlans, completedPlans,
+                totalPalletStock, totalSepStock,
+                lowStockFillers, totalFillers);
     }
 
     private String buildBasicSystemPrompt() {
