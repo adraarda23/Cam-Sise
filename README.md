@@ -512,7 +512,7 @@ src/
 
 ### Phase 2 — Planlanan Geliştirmeler
 
-- ⬜ Raporlama ve analitik ekranları (toplama istatistikleri, rota verimliliği, stok trendleri)
+- ✅ Raporlama ve analitik ekranları (toplama istatistikleri, rota verimliliği, stok trendleri)
 - ⬜ Yapay zeka destekli müşteri hizmetleri chat modülü (Claude/OpenAI entegrasyonu)
 - ⬜ Test kapsamının genişletilmesi (service layer unit testleri, kritik akış entegrasyon testleri)
 - ⬜ Bildirim sistemi (stok uyarıları, talep durum değişikliği bildirimleri)
