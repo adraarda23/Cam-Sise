@@ -513,7 +513,8 @@ src/
 ### Phase 2 — Planlanan Geliştirmeler
 
 - ✅ Raporlama ve analitik ekranları (toplama istatistikleri, rota verimliliği, stok trendleri)
-- ⬜ Yapay zeka destekli müşteri hizmetleri chat modülü (Claude/OpenAI entegrasyonu)
+- ✅ Yapay zeka destekli müşteri hizmetleri chat modülü (Gemini entegrasyonu)
+- ⬜ Yapay zeka destekli staff hizmetleri chat modülü (Gemini entegrasyonu)
 - ⬜ Test kapsamının genişletilmesi (service layer unit testleri, kritik akış entegrasyon testleri)
 - ⬜ Bildirim sistemi (stok uyarıları, talep durum değişikliği bildirimleri)
 - ⬜ Demo senaryosu hazırlığı ve tez dökümanı yazımı
