@@ -509,8 +509,15 @@ src/
 - ✅ COMPANY_STAFF dashboard — envanter özeti, talep havuzu, rota ekranı
 - ✅ CUSTOMER dashboard — stok, zaiyat, manuel talep formu
 - ✅ Harita entegrasyonu — Gemlik depo + dolumcu lokasyonları + aktif rota
-- ⬜ Demo senaryosu hazırlığı
-- ⬜ Tez dökümanı yazımı
+
+### Phase 2 — Planlanan Geliştirmeler
+
+- ⬜ Raporlama ve analitik ekranları (toplama istatistikleri, rota verimliliği, stok trendleri)
+- ⬜ Yapay zeka destekli müşteri hizmetleri chat modülü (Claude/OpenAI entegrasyonu)
+- ⬜ Test kapsamının genişletilmesi (service layer unit testleri, kritik akış entegrasyon testleri)
+- ⬜ Bildirim sistemi (stok uyarıları, talep durum değişikliği bildirimleri)
+- ⬜ Demo senaryosu hazırlığı ve tez dökümanı yazımı
+- ⬜ Deployment altyapısı kurulumu
 
 ---
 
