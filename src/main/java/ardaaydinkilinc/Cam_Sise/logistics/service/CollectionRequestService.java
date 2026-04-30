@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Application service for CollectionRequest aggregate.
@@ -96,7 +97,7 @@ public class CollectionRequestService {
 
             // Calculate active quantity excluding the existing pending request
             int totalActiveExcludingPending = activeRequests.stream()
-                    .filter(r -> !r.getId().equals(existingPendingRequest.getId()))
+                    .filter(r -> !Objects.equals(r.getId(), existingPendingRequest.getId()))
                     .mapToInt(CollectionRequest::getEstimatedQuantity)
                     .sum();
 

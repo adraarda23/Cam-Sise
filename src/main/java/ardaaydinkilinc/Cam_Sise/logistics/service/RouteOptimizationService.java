@@ -384,9 +384,9 @@ public class RouteOptimizationService {
                 .reduce(new Capacity(0, 0), Capacity::add);
 
         int minNeeded = calculateNeededVehicles(totalDemand, vehicleType.getCapacity());
-        // Cap at number of nodes (can't have more vehicles than stops), take the larger of
-        // what the user requested and what capacity requires
-        int vehiclesToUse = Math.max(minNeeded, Math.min(maxVehicles, nodes.size()));
+        // Use exactly as many vehicles as capacity requires, capped at nodes.size().
+        // maxVehicles is an upper-bound hint; minNeeded always takes priority.
+        int vehiclesToUse = Math.min(nodes.size(), minNeeded);
 
         if (vehiclesToUse != maxVehicles) {
             log.info("Adjusted vehicle count from {} to {} (min needed by capacity: {})",
