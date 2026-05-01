@@ -5,6 +5,7 @@ Cam şişe dolum sektöründe kullanılan **yeniden kullanılabilir palet ve sep
 > Bursa Teknik Üniversitesi — Bilgisayar Mühendisliği Bitirme Tezi  
 > Desteksiz (anonim şirket) proje — Cartonplast iş modeli referans alınmıştır.
 
+
 ---
 
 ## İş Döngüsü
