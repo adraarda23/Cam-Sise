@@ -8,10 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Smoke test to verify application starts successfully
- * This test ensures the Spring context loads and all beans are properly configured
- */
 @SpringBootTest
 @DisplayName("Smoke Test")
 class SmokeTest {

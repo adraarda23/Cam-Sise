@@ -210,8 +210,6 @@ class VehicleTest {
         }
     }
 
-    // ───── Helpers ────────────────────────────────────────────────────────
-
     private Vehicle vehicle() {
         return Vehicle.register(1L, 1L, "34ABC123");
     }

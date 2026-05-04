@@ -183,8 +183,6 @@ class CollectionPlanTest {
         }
     }
 
-    // ───── Helpers ────────────────────────────────────────────────────────
-
     private CollectionPlan plan() {
         return CollectionPlan.generate(
                 1L,

@@ -14,8 +14,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("CollectionRequest Domain Tests")
 class CollectionRequestTest {
 
-    // ───── Factory methods ─────────────────────────────────────────────────
-
     @Nested
     @DisplayName("createAutomatic")
     class CreateAutomatic {
@@ -67,8 +65,6 @@ class CollectionRequestTest {
             assertThat(req.getDomainEvents().get(0)).isInstanceOf(CollectionRequestCreated.class);
         }
     }
-
-    // ───── State transitions ───────────────────────────────────────────────
 
     @Nested
     @DisplayName("approve")
@@ -299,8 +295,6 @@ class CollectionRequestTest {
             assertThatThrownBy(() -> approved().updateQuantity(100)).isInstanceOf(IllegalStateException.class);
         }
     }
-
-    // ───── Helpers ────────────────────────────────────────────────────────
 
     private CollectionRequest pending() {
         return CollectionRequest.createManual(1L, AssetType.PALLET, 100, 1L);

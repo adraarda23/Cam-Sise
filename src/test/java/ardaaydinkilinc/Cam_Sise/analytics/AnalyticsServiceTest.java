@@ -163,12 +163,10 @@ class AnalyticsServiceTest {
         @Test
         @DisplayName("counts fillers with stock at or above threshold")
         void countsFillersBelowThreshold() {
-            // threshold=100, current=150 → above threshold (needs collection)
             FillerStock above = FillerStock.initialize(1L, AssetType.PALLET, 100, new LossRate(5.0));
             above.recordInflow(150, "INF");
             above.clearDomainEvents();
 
-            // threshold=200, current=50 → below threshold (ok)
             FillerStock below = FillerStock.initialize(2L, AssetType.PALLET, 200, new LossRate(5.0));
             below.recordInflow(50, "INF");
             below.clearDomainEvents();
@@ -183,8 +181,6 @@ class AnalyticsServiceTest {
             assertThat(summary.fillersWithLowPalletStock()).isEqualTo(1);
         }
     }
-
-    // ───── Helper ─────────────────────────────────────────────────────────
 
     private FillerStock stockWith(Long fillerId, AssetType assetType, int quantity) {
         FillerStock stock = FillerStock.initialize(fillerId, assetType, 50, new LossRate(5.0));

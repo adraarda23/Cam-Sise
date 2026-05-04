@@ -56,8 +56,6 @@ class CollectionRequestServiceTest {
         settings.setMinSeparatorRequestQty(10);
     }
 
-    // ─── createManual ─────────────────────────────────────────────────────
-
     @Nested
     @DisplayName("createManual")
     class CreateManual {
@@ -162,8 +160,6 @@ class CollectionRequestServiceTest {
         }
     }
 
-    // ─── createAutomatic ──────────────────────────────────────────────────
-
     @Nested
     @DisplayName("createAutomatic")
     class CreateAutomatic {
@@ -181,8 +177,6 @@ class CollectionRequestServiceTest {
             verify(collectionRequestRepository).save(any(CollectionRequest.class));
         }
     }
-
-    // ─── approve ──────────────────────────────────────────────────────────
 
     @Nested
     @DisplayName("approve")
@@ -212,8 +206,6 @@ class CollectionRequestServiceTest {
         }
     }
 
-    // ─── reject ───────────────────────────────────────────────────────────
-
     @Nested
     @DisplayName("reject")
     class Reject {
@@ -240,8 +232,6 @@ class CollectionRequestServiceTest {
         }
     }
 
-    // ─── cancel ───────────────────────────────────────────────────────────
-
     @Nested
     @DisplayName("cancel")
     class Cancel {
@@ -266,8 +256,6 @@ class CollectionRequestServiceTest {
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
-
-    // ─── schedule / complete ──────────────────────────────────────────────
 
     @Nested
     @DisplayName("schedule")

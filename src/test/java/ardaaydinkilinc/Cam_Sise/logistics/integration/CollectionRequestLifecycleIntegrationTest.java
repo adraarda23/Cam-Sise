@@ -30,10 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Integration tests for CollectionRequest full lifecycle using H2 in-memory database.
- * Covers the core business rules that protect against regressions.
- */
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
@@ -83,8 +79,6 @@ class CollectionRequestLifecycleIntegrationTest {
         fillerStockRepository.save(stock);
     }
 
-    // ─── Full lifecycle ───────────────────────────────────────────────────
-
     @Nested
     @DisplayName("Full lifecycle: createManual → approve → schedule → complete")
     class FullLifecycle {
@@ -92,7 +86,6 @@ class CollectionRequestLifecycleIntegrationTest {
         @Test
         @DisplayName("request transitions through all statuses to COMPLETED")
         void fullLifecycle() {
-            // 1. Create
             CollectionRequest req = collectionRequestService.createManual(
                     fillerId, AssetType.PALLET, 100, USER_ID, poolOperatorId);
 
@@ -100,20 +93,16 @@ class CollectionRequestLifecycleIntegrationTest {
             assertThat(req.getStatus()).isEqualTo(RequestStatus.PENDING);
             assertThat(req.getEstimatedQuantity()).isEqualTo(100);
 
-            // 2. Approve
             CollectionRequest approved = collectionRequestService.approve(req.getId(), USER_ID);
             assertThat(approved.getStatus()).isEqualTo(RequestStatus.APPROVED);
 
-            // 3. Schedule
             CollectionRequest scheduled = collectionRequestService.schedule(req.getId(), 42L);
             assertThat(scheduled.getStatus()).isEqualTo(RequestStatus.SCHEDULED);
             assertThat(scheduled.getCollectionPlanId()).isEqualTo(42L);
 
-            // 4. Complete
             CollectionRequest completed = collectionRequestService.complete(req.getId());
             assertThat(completed.getStatus()).isEqualTo(RequestStatus.COMPLETED);
 
-            // Verify persisted state
             CollectionRequest fromDb = collectionRequestRepository.findById(req.getId()).orElseThrow();
             assertThat(fromDb.getStatus()).isEqualTo(RequestStatus.COMPLETED);
         }
@@ -141,8 +130,6 @@ class CollectionRequestLifecycleIntegrationTest {
             assertThat(rejected.getRejectionReason()).isEqualTo("Stok yetersiz");
         }
     }
-
-    // ─── Business rule regressions ────────────────────────────────────────
 
     @Nested
     @DisplayName("Minimum quantity enforcement (regression)")
@@ -185,12 +172,10 @@ class CollectionRequestLifecycleIntegrationTest {
         @Test
         @DisplayName("approved requests reduce available stock for new requests")
         void approvedRequestsReduceAvailableStock() {
-            // Approve a request for 400 → only 100 of the 500 stock remains
             CollectionRequest first = collectionRequestService.createManual(
                     fillerId, AssetType.PALLET, 400, USER_ID, poolOperatorId);
             collectionRequestService.approve(first.getId(), USER_ID);
 
-            // Now requesting 150 should fail (400 approved + 150 new = 550 > 500)
             assertThatThrownBy(() ->
                     collectionRequestService.createManual(
                             fillerId, AssetType.PALLET, 150, USER_ID, poolOperatorId))
@@ -205,10 +190,8 @@ class CollectionRequestLifecycleIntegrationTest {
         @Test
         @DisplayName("second PENDING request merges quantity into existing PENDING request")
         void mergesIntoPendingRequest() {
-            // First request
             collectionRequestService.createManual(fillerId, AssetType.PALLET, 100, USER_ID, poolOperatorId);
 
-            // Second request — should merge into first
             CollectionRequest merged = collectionRequestService.createManual(
                     fillerId, AssetType.PALLET, 50, USER_ID, poolOperatorId);
 

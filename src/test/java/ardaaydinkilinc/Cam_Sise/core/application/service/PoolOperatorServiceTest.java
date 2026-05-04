@@ -20,9 +20,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for PoolOperatorService
- */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PoolOperatorService Tests")
 class PoolOperatorServiceTest {
@@ -51,21 +48,14 @@ class PoolOperatorServiceTest {
     @Test
     @DisplayName("Should register new pool operator successfully")
     void shouldRegisterNewPoolOperator() {
-        // Given
         when(poolOperatorRepository.existsByTaxId_Value(taxIdValue)).thenReturn(false);
         when(poolOperatorRepository.save(any(PoolOperator.class)))
-                .thenAnswer(invocation -> {
-                    PoolOperator po = invocation.getArgument(0);
-                    // Simulate setting ID after save
-                    return po;
-                });
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        // When
         PoolOperator result = poolOperatorService.registerPoolOperator(
                 companyName, taxIdValue, phone, email, contactPersonName
         );
 
-        // Then
         assertThat(result).isNotNull();
         assertThat(result.getCompanyName()).isEqualTo(companyName);
         assertThat(result.getTaxId().value()).isEqualTo(taxIdValue);
@@ -80,10 +70,8 @@ class PoolOperatorServiceTest {
     @Test
     @DisplayName("Should throw exception when tax ID already exists")
     void shouldThrowExceptionWhenTaxIdExists() {
-        // Given
         when(poolOperatorRepository.existsByTaxId_Value(taxIdValue)).thenReturn(true);
 
-        // When/Then
         assertThatThrownBy(() -> poolOperatorService.registerPoolOperator(
                 companyName, taxIdValue, phone, email, contactPersonName
         ))
@@ -97,7 +85,6 @@ class PoolOperatorServiceTest {
     @Test
     @DisplayName("Should activate pool operator successfully")
     void shouldActivatePoolOperator() {
-        // Given
         Long poolOperatorId = 1L;
         PoolOperator poolOperator = PoolOperator.register(
                 companyName,
@@ -109,10 +96,8 @@ class PoolOperatorServiceTest {
         when(poolOperatorRepository.findById(poolOperatorId)).thenReturn(Optional.of(poolOperator));
         when(poolOperatorRepository.save(any(PoolOperator.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        // When
         PoolOperator result = poolOperatorService.activatePoolOperator(poolOperatorId);
 
-        // Then
         assertThat(result.getActive()).isTrue();
         verify(poolOperatorRepository).findById(poolOperatorId);
         verify(poolOperatorRepository).save(poolOperator);
@@ -121,7 +106,6 @@ class PoolOperatorServiceTest {
     @Test
     @DisplayName("Should deactivate pool operator successfully")
     void shouldDeactivatePoolOperator() {
-        // Given
         Long poolOperatorId = 1L;
         PoolOperator poolOperator = PoolOperator.register(
                 companyName,
@@ -132,10 +116,8 @@ class PoolOperatorServiceTest {
         when(poolOperatorRepository.findById(poolOperatorId)).thenReturn(Optional.of(poolOperator));
         when(poolOperatorRepository.save(any(PoolOperator.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        // When
         PoolOperator result = poolOperatorService.deactivatePoolOperator(poolOperatorId);
 
-        // Then
         assertThat(result.getActive()).isFalse();
         verify(poolOperatorRepository).findById(poolOperatorId);
         verify(poolOperatorRepository).save(poolOperator);
@@ -144,7 +126,6 @@ class PoolOperatorServiceTest {
     @Test
     @DisplayName("Should update contact info successfully")
     void shouldUpdateContactInfo() {
-        // Given
         Long poolOperatorId = 1L;
         PoolOperator poolOperator = PoolOperator.register(
                 companyName,
@@ -159,12 +140,10 @@ class PoolOperatorServiceTest {
         when(poolOperatorRepository.findById(poolOperatorId)).thenReturn(Optional.of(poolOperator));
         when(poolOperatorRepository.save(any(PoolOperator.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        // When
         PoolOperator result = poolOperatorService.updateContactInfo(
                 poolOperatorId, newPhone, newEmail, newContactPersonName
         );
 
-        // Then
         assertThat(result.getContactInfo().phone()).isEqualTo(newPhone);
         assertThat(result.getContactInfo().email()).isEqualTo(newEmail);
         assertThat(result.getContactInfo().contactPersonName()).isEqualTo(newContactPersonName);
@@ -175,11 +154,9 @@ class PoolOperatorServiceTest {
     @Test
     @DisplayName("Should throw exception when pool operator not found")
     void shouldThrowExceptionWhenPoolOperatorNotFound() {
-        // Given
         Long poolOperatorId = 999L;
         when(poolOperatorRepository.findById(poolOperatorId)).thenReturn(Optional.empty());
 
-        // When/Then
         assertThatThrownBy(() -> poolOperatorService.findById(poolOperatorId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Pool operator not found");
@@ -190,7 +167,6 @@ class PoolOperatorServiceTest {
     @Test
     @DisplayName("Should find pool operator by ID successfully")
     void shouldFindPoolOperatorById() {
-        // Given
         Long poolOperatorId = 1L;
         PoolOperator poolOperator = PoolOperator.register(
                 companyName,
@@ -200,10 +176,8 @@ class PoolOperatorServiceTest {
 
         when(poolOperatorRepository.findById(poolOperatorId)).thenReturn(Optional.of(poolOperator));
 
-        // When
         PoolOperator result = poolOperatorService.findById(poolOperatorId);
 
-        // Then
         assertThat(result).isNotNull();
         assertThat(result.getCompanyName()).isEqualTo(companyName);
         verify(poolOperatorRepository).findById(poolOperatorId);
