@@ -27,8 +27,7 @@ public interface DomainEventStoreRepository extends JpaRepository<DomainEventSto
      */
     List<DomainEventStore> findByOccurredAtBetween(LocalDateTime start, LocalDateTime end);
 
-    /**
-     * Find all events for a specific aggregate type
-     */
     List<DomainEventStore> findByAggregateType(String aggregateType);
+
+    int deleteByOccurredAtBefore(LocalDateTime cutoff);
 }
