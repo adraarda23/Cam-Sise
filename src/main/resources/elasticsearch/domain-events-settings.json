@@ -1,0 +1,7 @@
+{
+  "index": {
+    "lifecycle": {
+      "name": "domain-events"
+    }
+  }
+}

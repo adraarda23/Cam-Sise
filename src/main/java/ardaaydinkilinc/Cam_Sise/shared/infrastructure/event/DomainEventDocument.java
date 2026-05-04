@@ -10,6 +10,7 @@ import org.springframework.data.elasticsearch.annotations.*;
 import java.time.LocalDateTime;
 
 @Document(indexName = "domain-events")
+@Setting(settingPath = "/elasticsearch/domain-events-settings.json")
 @Data
 @Builder
 @NoArgsConstructor
