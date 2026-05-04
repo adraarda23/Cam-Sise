@@ -10,7 +10,9 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.UUID;
 
 @Component
@@ -35,8 +37,8 @@ public class DomainEventStoreHandler {
                     .id(UUID.randomUUID().toString())
                     .eventType(event.getClass().getSimpleName())
                     .eventData(serializeEvent(event))
-                    .occurredAt(extractOccurredAt(event))
-                    .storedAt(LocalDateTime.now())
+                    .occurredAt(extractOccurredAt(event).atZone(ZoneId.systemDefault()).toInstant())
+                    .storedAt(Instant.now())
                     .aggregateId(extractAggregateId(event))
                     .aggregateType(extractAggregateType(event))
                     .build();

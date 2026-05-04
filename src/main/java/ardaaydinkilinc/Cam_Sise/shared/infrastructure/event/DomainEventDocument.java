@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Document(indexName = "domain-events")
 @Setting(settingPath = "/elasticsearch/domain-events-settings.json")
@@ -26,11 +26,11 @@ public class DomainEventDocument {
     @Field(type = FieldType.Text)
     private String eventData;
 
-    @Field(type = FieldType.Date, format = {DateFormat.date_hour_minute_second_millis, DateFormat.epoch_millis})
-    private LocalDateTime occurredAt;
+    @Field(type = FieldType.Date, format = DateFormat.epoch_millis)
+    private Instant occurredAt;
 
-    @Field(type = FieldType.Date, format = {DateFormat.date_hour_minute_second_millis, DateFormat.epoch_millis})
-    private LocalDateTime storedAt;
+    @Field(type = FieldType.Date, format = DateFormat.epoch_millis)
+    private Instant storedAt;
 
     @Field(type = FieldType.Keyword)
     private String aggregateId;
