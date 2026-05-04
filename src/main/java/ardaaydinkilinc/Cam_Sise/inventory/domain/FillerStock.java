@@ -3,6 +3,7 @@ package ardaaydinkilinc.Cam_Sise.inventory.domain;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.event.AssetCollected;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.event.AssetInflowRecorded;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.event.StockThresholdExceeded;
+import ardaaydinkilinc.Cam_Sise.inventory.domain.event.StockThresholdUpdated;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.LossRate;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.StockMovement;
@@ -137,10 +138,10 @@ public class FillerStock extends AggregateRoot<Long> {
         if (newThreshold < 0) {
             throw new IllegalArgumentException("Threshold cannot be negative");
         }
+        int oldThreshold = this.thresholdQuantity;
         this.thresholdQuantity = newThreshold;
         this.updatedAt = LocalDateTime.now();
-
-        // Check if current stock exceeds new threshold
+        addDomainEvent(new StockThresholdUpdated(this.id, this.fillerId, this.assetType, oldThreshold, newThreshold, LocalDateTime.now()));
         checkThreshold();
     }
 

@@ -44,7 +44,7 @@ public class DomainEventStoreHandler {
                     .build();
 
             searchRepository.save(doc);
-            log.debug("Audit log kaydedildi (ES): {}", event.getClass().getSimpleName());
+            log.info("Audit log kaydedildi (ES): {} | aggregate: {} | id: {}", doc.getEventType(), doc.getAggregateType(), doc.getAggregateId());
 
         } catch (Exception e) {
             log.error("Audit log kaydedilemedi: {}", event.getClass().getSimpleName(), e);

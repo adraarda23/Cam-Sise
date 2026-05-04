@@ -175,6 +175,7 @@ public class CollectionPlan extends AggregateRoot<Long> {
 
         this.status = PlanStatus.CANCELLED;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new CollectionPlanCancelled(this.id, LocalDateTime.now()));
     }
 
     @PrePersist

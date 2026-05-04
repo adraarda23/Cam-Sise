@@ -1,5 +1,6 @@
 package ardaaydinkilinc.Cam_Sise.auth.domain;
 
+import ardaaydinkilinc.Cam_Sise.auth.domain.event.UserDeactivated;
 import ardaaydinkilinc.Cam_Sise.auth.domain.event.UserRegistered;
 import ardaaydinkilinc.Cam_Sise.auth.domain.event.UserRoleChanged;
 import ardaaydinkilinc.Cam_Sise.shared.domain.base.AggregateRoot;
@@ -131,6 +132,7 @@ public class User extends AggregateRoot<Long> {
     public void deactivate() {
         this.active = false;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new UserDeactivated(this.id, this.poolOperatorId, this.username, LocalDateTime.now()));
     }
 
     @PrePersist

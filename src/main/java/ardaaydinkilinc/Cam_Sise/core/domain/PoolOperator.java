@@ -3,6 +3,7 @@ package ardaaydinkilinc.Cam_Sise.core.domain;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.PoolOperatorActivated;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.PoolOperatorDeactivated;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.PoolOperatorRegistered;
+import ardaaydinkilinc.Cam_Sise.core.domain.event.PoolOperatorUpdated;
 import ardaaydinkilinc.Cam_Sise.shared.domain.base.AggregateRoot;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.ContactInfo;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.TaxId;
@@ -113,6 +114,7 @@ public class PoolOperator extends AggregateRoot<Long> {
     public void updateContactInfo(ContactInfo newContactInfo) {
         this.contactInfo = newContactInfo;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new PoolOperatorUpdated(this.id, "contactInfo", LocalDateTime.now()));
     }
 
     @PrePersist

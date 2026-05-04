@@ -3,6 +3,7 @@ package ardaaydinkilinc.Cam_Sise.core.domain;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerActivated;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerDeactivated;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerRegistered;
+import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerUpdated;
 import ardaaydinkilinc.Cam_Sise.shared.domain.base.AggregateRoot;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Address;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.ContactInfo;
@@ -144,30 +145,25 @@ public class Filler extends AggregateRoot<Long> {
     public void updateName(String newName) {
         this.name = newName;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new FillerUpdated(this.id, this.poolOperatorId, "name", LocalDateTime.now()));
     }
 
-    /**
-     * Update address
-     */
     public void updateAddress(Address newAddress) {
         this.address = newAddress;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new FillerUpdated(this.id, this.poolOperatorId, "address", LocalDateTime.now()));
     }
 
-    /**
-     * Update contact information
-     */
     public void updateContactInfo(ContactInfo newContactInfo) {
         this.contactInfo = newContactInfo;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new FillerUpdated(this.id, this.poolOperatorId, "contactInfo", LocalDateTime.now()));
     }
 
-    /**
-     * Update location
-     */
     public void updateLocation(GeoCoordinates newLocation) {
         this.location = newLocation;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new FillerUpdated(this.id, this.poolOperatorId, "location", LocalDateTime.now()));
     }
 
     @PrePersist

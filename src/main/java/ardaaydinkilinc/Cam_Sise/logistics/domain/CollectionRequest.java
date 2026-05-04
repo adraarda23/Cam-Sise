@@ -180,11 +180,9 @@ public class CollectionRequest extends AggregateRoot<Long> {
         this.status = RequestStatus.SCHEDULED;
         this.collectionPlanId = planId;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new CollectionRequestScheduled(this.id, this.fillerId, planId, LocalDateTime.now()));
     }
 
-    /**
-     * Mark as completed
-     */
     public void complete() {
         if (!status.canTransitionTo(RequestStatus.COMPLETED)) {
             throw new IllegalStateException("Cannot complete request in status: " + status);
@@ -192,11 +190,9 @@ public class CollectionRequest extends AggregateRoot<Long> {
 
         this.status = RequestStatus.COMPLETED;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new CollectionRequestCompleted(this.id, this.fillerId, LocalDateTime.now()));
     }
 
-    /**
-     * Update the estimated quantity (for merging requests)
-     */
     public void updateQuantity(Integer newQuantity) {
         if (this.status != RequestStatus.PENDING) {
             throw new IllegalStateException("Can only update quantity for PENDING requests");
@@ -206,8 +202,10 @@ public class CollectionRequest extends AggregateRoot<Long> {
             throw new IllegalArgumentException("Quantity must be positive");
         }
 
+        int oldQuantity = this.estimatedQuantity;
         this.estimatedQuantity = newQuantity;
         this.updatedAt = LocalDateTime.now();
+        addDomainEvent(new CollectionRequestQuantityUpdated(this.id, this.fillerId, oldQuantity, newQuantity, LocalDateTime.now()));
     }
 
     @PrePersist

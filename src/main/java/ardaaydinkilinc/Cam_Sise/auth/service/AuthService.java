@@ -1,14 +1,18 @@
 package ardaaydinkilinc.Cam_Sise.auth.service;
 
 import ardaaydinkilinc.Cam_Sise.auth.domain.User;
+import ardaaydinkilinc.Cam_Sise.auth.domain.event.UserLoggedIn;
 import ardaaydinkilinc.Cam_Sise.auth.dto.LoginRequest;
 import ardaaydinkilinc.Cam_Sise.auth.dto.LoginResponse;
 import ardaaydinkilinc.Cam_Sise.auth.repository.UserRepository;
 import ardaaydinkilinc.Cam_Sise.shared.exception.AuthenticationException;
 import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -17,6 +21,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final ApplicationEventPublisher eventPublisher;
 
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByUsernameAndActiveTrue(request.getUsername())
@@ -27,6 +32,14 @@ public class AuthService {
         }
 
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole().name(), user.getPoolOperatorId());
+
+        eventPublisher.publishEvent(new UserLoggedIn(
+                user.getId(),
+                user.getPoolOperatorId(),
+                user.getUsername(),
+                user.getRole().name(),
+                LocalDateTime.now()
+        ));
 
         return LoginResponse.builder()
                 .token(token)
