@@ -32,38 +32,65 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 ## Mimari
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                    Modular Monolith                           │
-│                                                               │
-│  ┌──────────┐  ┌───────────┐  ┌───────────┐  ┌─────────┐    │
-│  │   Core   │  │ Inventory │  │ Logistics │  │  Auth   │    │
-│  │  Module  │  │  Module   │  │  Module   │  │ Module  │    │
-│  │          │  │           │  │           │  │         │    │
-│  │PoolOp.   │  │FillerStock│  │VehicleType│  │  User   │    │
-│  │Filler    │  │LossRecord │  │  Depot    │  │         │    │
-│  │          │  │           │  │  Vehicle  │  │         │    │
-│  │          │  │           │  │Collection │  │         │    │
-│  │          │  │           │  │  Request  │  │         │    │
-│  │          │  │           │  │Collection │  │         │    │
-│  │          │  │           │  │   Plan    │  │         │    │
-│  └────┬─────┘  └─────┬─────┘  └─────┬─────┘  └────┬────┘    │
-│       │              │              │             │          │
-│       └──────────────┴──────────────┴─────────────┘          │
-│                      │                                       │
-│                Domain Events Bus                             │
-│                      │                                       │
-│            ┌─────────▼─────────┐                             │
-│            │  Event Sourcing   │                             │
-│            │  (Audit Logging)  │                             │
-│            └───────────────────┘                             │
-└───────────────────────────────────────────────────────────────┘
-                      │
-                      ▼
-              PostgreSQL (Supabase)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Modular Monolith                               │
+│                                                                             │
+│  ┌──────────┐  ┌───────────┐  ┌───────────┐  ┌─────────┐                  │
+│  │   Core   │  │ Inventory │  │ Logistics │  │  Auth   │                  │
+│  │  Module  │  │  Module   │  │  Module   │  │ Module  │                  │
+│  │          │  │           │  │           │  │         │                  │
+│  │PoolOp.   │  │FillerStock│  │VehicleType│  │  User   │                  │
+│  │Filler    │  │LossRecord │  │  Depot    │  │         │                  │
+│  │          │  │           │  │  Vehicle  │  │         │                  │
+│  │          │  │           │  │Collection │  │         │                  │
+│  │          │  │           │  │  Request  │  │         │                  │
+│  │          │  │           │  │Collection │  │         │                  │
+│  │          │  │           │  │   Plan    │  │         │                  │
+│  └────┬─────┘  └─────┬─────┘  └─────┬─────┘  └────┬────┘                  │
+│       │              │              │             │                        │
+│       └──────────────┴──────────────┴─────────────┘                        │
+│                                    │                                       │
+│                          Domain Events Bus                                 │
+│                                    │                                       │
+│                        ┌───────────▼──────────┐                            │
+│                        │    Event Sourcing    │                            │
+│                        │   (Audit Logging)    │                            │
+│                        └──────────────────────┘                            │
+│                                                                             │
+│  ┌──────────────┐  ┌───────────────────────┐  ┌──────────────────────┐    │
+│  │  Analytics   │  │       Chat Module     │  │   Settings Module    │    │
+│  │   Module     │  │                       │  │                      │    │
+│  │              │  │  ChatService          │  │  CompanySettings     │    │
+│  │AnalyticsSvc  │  │  GeminiService        │  │  (min. talep mikt.)  │    │
+│  │AnalyticsSumm │  │  (Google Gemini AI)   │  │                      │    │
+│  └──────────────┘  └───────────────────────┘  └──────────────────────┘    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                          Shared Kernel                              │   │
+│  │  DDD Base (AggregateRoot, Entity, VO) · Domain Event Infrastructure │   │
+│  │  Shared VOs · Exception Handling · JWT Util · CORS · OpenAPI       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                            PostgreSQL (Supabase)
+                          H2 (in-memory, test ortamı)
 ```
 
 **Dış yapı:** Modular Monolith — her bounded context kendi modülünde
 **İç yapı:** DDD-based Layered Architecture
+
+**Modüller:**
+| Modül | Sorumluluk |
+|---|---|
+| `core` | Tenant (PoolOperator) ve dolumcu (Filler) yönetimi |
+| `inventory` | Asset stok takibi, zaiyat hesabı, eşik kontrolü |
+| `logistics` | Araç, depo, talep ve rota planlama (CVRP) |
+| `auth` | JWT kimlik doğrulama, rol yönetimi |
+| `analytics` | Özet dashboard — talep, plan ve stok istatistikleri |
+| `chat` | Google Gemini tabanlı AI asistan (CUSTOMER + COMPANY_STAFF) |
+| `settings` | Operatör bazlı iş kuralı konfigürasyonu |
+| `shared` | DDD altyapısı, event bus, paylaşılan VO'lar, exception handling |
 
 **Katman organizasyonu:**
 - `controller/` — REST Controllers (Presentation Layer)
@@ -147,8 +174,11 @@ Aggregate'ler, Value Object'ler, Domain Event'ler, API endpoint'leri ve daha faz
 | Güvenlik | Spring Security + JWT (jjwt) |
 | Rota Optimizasyonu | Clarke-Wright Savings Algorithm (Custom Implementation) |
 | | Multi-vehicle CVRP with constraints (800km, 10h) |
+| AI Asistan | Google Gemini API (gemini-2.0-flash) |
 | API Dokümantasyonu | SpringDoc OpenAPI (Swagger UI) |
 | Build | Maven |
+| Yardımcı Kütüphaneler | Lombok, Jackson |
+| Test DB | H2 (in-memory) |
 | Frontend | TBD |
 | Harita | Leaflet + OpenStreetMap (TBD) |
 
@@ -288,6 +318,48 @@ Kimlik doğrulama ve yetkilendirme.
 
 ---
 
+### Analytics Module
+Sistem geneli raporlama ve özet dashboard.
+
+**Sorumluluklar:**
+- Toplama talepleri istatistikleri (durum dağılımı, asset tipi bazında)
+- Toplama planları istatistikleri (ortalama mesafe, ortalama süre)
+- Stok özeti (toplam palet/ayırıcı stoku, eşik aşan dolumcu sayısı)
+- Havuz operatörü bazlı filtreleme
+
+**API Endpoint:** `GET /api/analytics/summary`
+
+---
+
+### Chat Module
+Google Gemini AI tabanlı akıllı asistan.
+
+**Bileşenler:**
+- `ChatService` — Rol bazlı sistem prompt oluşturma ve AI yanıtı işleme
+- `GeminiService` — Google Gemini API entegrasyonu
+
+**Özellikler:**
+- **CUSTOMER rolü:** Kendi stok ve talep durumunu doğal dilde sorgulayabilir; chat üzerinden toplama talebi oluşturabilir (ACTION_JSON mekanizması ile)
+- **COMPANY_STAFF rolü:** Tüm sistem özeti (bekleyen talepler, aktif planlar, eşik aşan dolumcular) doğal dilde sorgulanabilir
+- Çok turlu sohbet geçmişi desteği
+- Bağlam farkındalıklı sistem prompt'u (canlı stok ve talep verisiyle zenginleştirilmiş)
+
+**API Endpoint:** `POST /api/chat`
+
+---
+
+### Settings Module
+Havuz operatörü bazlı şirket ayarları.
+
+**Aggregate Roots:**
+- `CompanySettings` - Operatör başına iş kuralı konfigürasyonu
+
+**Sorumluluklar:**
+- Minimum talep miktarı eşiklerini yönetme (palet ve ayırıcı için ayrı ayrı)
+- Chat ve toplama akışları tarafından tüketilen iş kuralları
+
+---
+
 ## Proje Yapısı
 
 ```
@@ -397,31 +469,54 @@ src/
 │   │   │       ├── CollectionRequestRepository.java
 │   │   │       └── CollectionPlanRepository.java
 │   │   │
-│   │   └── auth/
+│   │   ├── auth/
+│   │   │   ├── controller/
+│   │   │   │   ├── AuthController.java
+│   │   │   │   ├── UserController.java
+│   │   │   │   └── TestEventController.java
+│   │   │   ├── service/
+│   │   │   │   ├── AuthService.java
+│   │   │   │   ├── UserService.java
+│   │   │   │   └── event/
+│   │   │   │       └── UserEventHandler.java
+│   │   │   ├── domain/
+│   │   │   │   ├── User.java
+│   │   │   │   ├── Role.java
+│   │   │   │   └── event/
+│   │   │   ├── repository/
+│   │   │   │   └── UserRepository.java
+│   │   │   ├── config/
+│   │   │   │   ├── SecurityConfig.java
+│   │   │   │   └── DataInitializer.java
+│   │   │   ├── filter/
+│   │   │   │   └── JwtAuthenticationFilter.java
+│   │   │   └── dto/
+│   │   │       ├── LoginRequest.java
+│   │   │       └── LoginResponse.java
+│   │   │
+│   │   ├── analytics/
+│   │   │   ├── AnalyticsController.java
+│   │   │   ├── AnalyticsService.java
+│   │   │   └── AnalyticsSummary.java
+│   │   │
+│   │   ├── chat/
+│   │   │   ├── ChatController.java
+│   │   │   ├── ChatService.java
+│   │   │   ├── GeminiService.java
+│   │   │   └── ChatRequest.java
+│   │   │
+│   │   └── settings/
 │   │       ├── controller/
-│   │       │   └── TestEventController.java
+│   │       │   └── CompanySettingsController.java
 │   │       ├── service/
-│   │       │   ├── service/
-│   │       │   │   └── UserService.java
-│   │       │   └── event/
-│   │       │       └── UserEventHandler.java
+│   │       │   └── CompanySettingsService.java
 │   │       ├── domain/
-│   │       │   ├── User.java
-│   │       │   ├── Role.java
-│   │       │   └── event/         # Auth events
-│   │       ├── repository/
-│   │       │   └── UserRepository.java
-│   │       ├── config/
-│   │       │   ├── SecurityConfig.java
-│   │       │   └── DataInitializer.java
-│   │       ├── filter/
-│   │       │   └── JwtAuthenticationFilter.java
-│   │       └── dto/
+│   │       │   └── CompanySettings.java
+│   │       └── repository/
+│   │           └── CompanySettingsRepository.java
 │   │
 │   └── resources/
 │       ├── db/migration/
-│       │   ├── V1__initial_schema.sql
-│       │   ├── V2__auth_tables.sql
 │       │   └── V3__create_domain_model_tables.sql
 │       └── application.properties
 │
