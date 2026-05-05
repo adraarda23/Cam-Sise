@@ -179,9 +179,43 @@ Aggregate'ler, Value Object'ler, Domain Event'ler, API endpoint'leri ve daha faz
 | API Dokümantasyonu | SpringDoc OpenAPI (Swagger UI) |
 | Build | Maven |
 | Yardımcı Kütüphaneler | Lombok, Jackson |
+| Test | JUnit 5 + Mockito + AssertJ + JaCoCo |
 | Test DB | H2 (in-memory) |
 | Frontend | TBD |
 | Harita | Leaflet + OpenStreetMap (TBD) |
+
+---
+
+## Test Kapsamı
+
+| Metrik | Değer |
+|---|---|
+| Toplam Test Sayısı | **552** |
+| Instruction Coverage | **%84.6** (13.381 / 15.808) |
+| Branch Coverage | **%70.5** (523 / 742) |
+| Test Framework | JUnit 5 + Mockito + AssertJ |
+| Coverage Aracı | JaCoCo 0.8.12 |
+
+### Modül Bazlı Coverage
+
+| Modül | Instruction Coverage | Branch Coverage |
+|---|---|---|
+| `core` | %86.1 (1.224 / 1.422) | %76.7 (23 / 30) |
+| `inventory` | %92.3 (1.515 / 1.642) | %66.7 (32 / 48) |
+| `logistics` | %86.6 (6.299 / 7.275) | %76.3 (299 / 392) |
+| `auth` | %77.6 (1.212 / 1.562) | %57.9 (44 / 76) |
+| `analytics` | %93.9 (260 / 277) | %85.0 (17 / 20) |
+| `chat` | %66.2 (818 / 1.236) | %36.2 (29 / 80) |
+| `settings` | %100.0 (101 / 101) | %100.0 (2 / 2) |
+| `shared` | %85.6 (1.946 / 2.274) | %81.9 (77 / 94) |
+| **Toplam** | **%84.6 (13.381 / 15.808)** | **%70.5 (523 / 742)** |
+
+### Raporun Çalıştırılması
+
+```bash
+./mvnw test jacoco:report
+# Rapor: target/site/jacoco/index.html
+```
 
 ---
 
@@ -611,7 +645,7 @@ src/
 - ✅ Raporlama ve analitik ekranları (toplama istatistikleri, rota verimliliği, stok trendleri)
 - ✅ Yapay zeka destekli müşteri hizmetleri chat modülü (Gemini entegrasyonu)
 - ✅ Yapay zeka destekli staff hizmetleri chat modülü (Gemini entegrasyonu)
-- ⬜ Test kapsamının genişletilmesi (service layer unit testleri, kritik akış entegrasyon testleri)
+- ✅ Test kapsamının genişletilmesi — 552 test, %84.6 instruction / %70.5 branch coverage (JUnit 5 + Mockito + JaCoCo)
 - ⬜ Bildirim sistemi (stok uyarıları, talep durum değişikliği bildirimleri)
 - ⬜ Demo senaryosu hazırlığı ve tez dökümanı yazımı
 - ⬜ Deployment altyapısı kurulumu

@@ -74,16 +74,18 @@ class InventoryEventHandlerTest {
     }
 
     @Test
-    @DisplayName("AssetInflowRecorded eventini handle etmeli")
+    @DisplayName("AssetInflowRecorded: fillerStockService çağrılmamalı (sadece loglama)")
     void handlesAssetInflowRecorded() {
         var event = new AssetInflowRecorded(1L, 2L, AssetType.PALLET, 100, 600, "REF-001", LocalDateTime.now());
-        assertThatCode(() -> handler.handleAssetInflowRecorded(event)).doesNotThrowAnyException();
+        handler.handleAssetInflowRecorded(event);
+        verifyNoMoreInteractions(fillerStockService, collectionRequestService);
     }
 
     @Test
-    @DisplayName("AssetCollected eventini handle etmeli")
+    @DisplayName("AssetCollected: fillerStockService çağrılmamalı (sadece loglama)")
     void handlesAssetCollected() {
         var event = new AssetCollected(1L, 2L, AssetType.PALLET, 50, 550, "PLAN-001", LocalDateTime.now());
-        assertThatCode(() -> handler.handleAssetCollected(event)).doesNotThrowAnyException();
+        handler.handleAssetCollected(event);
+        verifyNoMoreInteractions(fillerStockService, collectionRequestService);
     }
 }

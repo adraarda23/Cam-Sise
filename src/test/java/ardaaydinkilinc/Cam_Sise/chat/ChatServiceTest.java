@@ -24,6 +24,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.mockito.ArgumentCaptor;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -79,7 +81,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("kullanıcı COMPANY_STAFF ise staff sistem promptu kullanılmalı")
+        @DisplayName("kullanıcı COMPANY_STAFF ise sistem promptu 'operasyon personeli' içermeli")
         void usesStaffPromptForCompanyStaff() {
             User staffUser = User.register(POOL_OPERATOR_ID, "staff01", "hashed", "Ali Veli", Role.COMPANY_STAFF, null);
             when(userRepository.findByUsernameAndActiveTrue("staff01")).thenReturn(Optional.of(staffUser));
@@ -87,25 +89,30 @@ class ChatServiceTest {
             when(collectionPlanRepository.findByPoolOperatorId(POOL_OPERATOR_ID)).thenReturn(List.of());
             when(fillerStockRepository.findByPoolOperatorId(POOL_OPERATOR_ID)).thenReturn(List.of());
 
-            String result = service.chat("staff01", POOL_OPERATOR_ID, "Durum ne?", List.of());
+            ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+            service.chat("staff01", POOL_OPERATOR_ID, "Durum ne?", List.of());
 
-            assertThat(result).isEqualTo("Merhaba!");
-            verify(geminiService).chat(eq("Durum ne?"), any(), any());
+            verify(geminiService).chat(eq("Durum ne?"), any(), promptCaptor.capture());
+            assertThat(promptCaptor.getValue())
+                    .contains("COMPANY_STAFF")
+                    .doesNotContain("ACTION_JSON");
         }
 
         @Test
-        @DisplayName("kullanıcı CUSTOMER ama fillerId null ise temel prompt kullanılmalı")
+        @DisplayName("kullanıcı CUSTOMER ama fillerId null ise temel prompt (ACTION_JSON yok) kullanılmalı")
         void usesBasicPromptForCustomerWithNullFillerId() {
             User customerNoFiller = User.register(POOL_OPERATOR_ID, "customer01", "hashed", "Müşteri", Role.CUSTOMER, null);
             when(userRepository.findByUsernameAndActiveTrue("customer01")).thenReturn(Optional.of(customerNoFiller));
 
-            String result = service.chat("customer01", POOL_OPERATOR_ID, "Merhaba", List.of());
+            ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+            service.chat("customer01", POOL_OPERATOR_ID, "Merhaba", List.of());
 
-            assertThat(result).isEqualTo("Merhaba!");
+            verify(geminiService).chat(eq("Merhaba"), any(), promptCaptor.capture());
+            assertThat(promptCaptor.getValue()).doesNotContain("ACTION_JSON");
         }
 
         @Test
-        @DisplayName("kullanıcı CUSTOMER ve fillerId var ise contextual prompt kullanılmalı")
+        @DisplayName("kullanıcı CUSTOMER ve fillerId var ise contextual prompt dolumcu bilgisi içermeli")
         void usesContextualPromptForCustomerWithFillerId() {
             User customerUser = User.register(POOL_OPERATOR_ID, "customer02", "hashed", "Müşteri", Role.CUSTOMER, FILLER_ID);
             when(userRepository.findByUsernameAndActiveTrue("customer02")).thenReturn(Optional.of(customerUser));
@@ -113,10 +120,13 @@ class ChatServiceTest {
             when(fillerStockRepository.findByFillerId(FILLER_ID)).thenReturn(List.of());
             when(collectionRequestRepository.findByFillerIdAndAssetTypeAndStatusIn(any(), any(), any())).thenReturn(List.of());
 
-            String result = service.chat("customer02", POOL_OPERATOR_ID, "Stok ne kadar?", List.of());
+            ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+            service.chat("customer02", POOL_OPERATOR_ID, "Stok ne kadar?", List.of());
 
-            assertThat(result).isEqualTo("Merhaba!");
-            verify(fillerStockRepository).findByFillerId(FILLER_ID);
+            verify(geminiService).chat(eq("Stok ne kadar?"), any(), promptCaptor.capture());
+            assertThat(promptCaptor.getValue())
+                    .contains("ACTION_JSON")           // müşteri promptunda eylem kuralları var
+                    .contains("Dolumcu ID: " + FILLER_ID);
         }
     }
 
@@ -200,17 +210,18 @@ class ChatServiceTest {
     class BuildWelcomeMessage {
 
         @Test
-        @DisplayName("kullanıcı bulunamazsa generic mesaj döndürmeli")
+        @DisplayName("kullanıcı bulunamazsa dolumcu bilgisi olmayan generic mesaj döndürmeli")
         void returnsGenericMessageWhenUserNotFound() {
             when(userRepository.findByUsernameAndActiveTrue("bilinmeyen")).thenReturn(Optional.empty());
 
             String result = service.buildWelcomeMessage("bilinmeyen", POOL_OPERATOR_ID);
 
-            assertThat(result).contains("yardımcı");
+            assertThat(result).contains("yardımcı olabilirim");
+            assertThat(result).doesNotContain("Sistem Özeti", "Mevcut Durumunuz");
         }
 
         @Test
-        @DisplayName("kullanıcı COMPANY_STAFF ise staff welcome mesajı döndürmeli")
+        @DisplayName("kullanıcı COMPANY_STAFF ise adı ve sistem özeti içeren mesaj döndürmeli")
         void returnsStaffWelcomeForCompanyStaff() {
             User staff = User.register(POOL_OPERATOR_ID, "staff01", "hashed", "Ali Veli", Role.COMPANY_STAFF, null);
             when(userRepository.findByUsernameAndActiveTrue("staff01")).thenReturn(Optional.of(staff));
@@ -220,22 +231,26 @@ class ChatServiceTest {
 
             String result = service.buildWelcomeMessage("staff01", POOL_OPERATOR_ID);
 
-            assertThat(result).contains("Ali Veli");
+            assertThat(result)
+                    .contains("Ali Veli")
+                    .contains("Sistem Özeti")
+                    .contains("Bekleyen talep");
         }
 
         @Test
-        @DisplayName("kullanıcı CUSTOMER ama fillerId null ise generic mesaj döndürmeli")
+        @DisplayName("kullanıcı CUSTOMER ama fillerId null ise stok içermeyen generic mesaj döndürmeli")
         void returnsGenericMessageForCustomerWithNullFillerId() {
             User customerNoFiller = User.register(POOL_OPERATOR_ID, "cu_nofiller", "hashed", "Müşteri", Role.CUSTOMER, null);
             when(userRepository.findByUsernameAndActiveTrue("cu_nofiller")).thenReturn(Optional.of(customerNoFiller));
 
             String result = service.buildWelcomeMessage("cu_nofiller", POOL_OPERATOR_ID);
 
-            assertThat(result).contains("yardımcı");
+            assertThat(result).contains("yardımcı olabilirim");
+            assertThat(result).doesNotContain("Palet", "Ayırıcı");
         }
 
         @Test
-        @DisplayName("kullanıcı CUSTOMER ve fillerId var ise contextual welcome döndürmeli")
+        @DisplayName("kullanıcı CUSTOMER ve fillerId var ise stok bilgisi ve minimum miktarlar içermeli")
         void returnsContextualWelcomeForCustomerWithFillerId() {
             User customerUser = User.register(POOL_OPERATOR_ID, "cu_filler", "hashed", "Müşteri", Role.CUSTOMER, FILLER_ID);
             when(userRepository.findByUsernameAndActiveTrue("cu_filler")).thenReturn(Optional.of(customerUser));
@@ -245,7 +260,11 @@ class ChatServiceTest {
 
             String result = service.buildWelcomeMessage("cu_filler", POOL_OPERATOR_ID);
 
-            assertThat(result).contains("Mevcut Durumunuz");
+            assertThat(result)
+                    .contains("Mevcut Durumunuz")
+                    .contains("Palet")
+                    .contains("Ayırıcı")
+                    .contains("min.");
         }
     }
 }

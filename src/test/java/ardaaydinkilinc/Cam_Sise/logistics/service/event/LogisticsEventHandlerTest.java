@@ -38,59 +38,75 @@ class LogisticsEventHandlerTest {
     private LogisticsEventHandler handler;
 
     @Test
-    @DisplayName("CollectionRequestApproved eventini handle etmeli")
+    @DisplayName("CollectionRequestApproved: servisler çağrılmamalı (sadece loglama)")
     void handlesCollectionRequestApproved() {
         var event = new CollectionRequestApproved(1L, 2L, 3L, LocalDateTime.now());
-        assertThatCode(() -> handler.handleCollectionRequestApproved(event)).doesNotThrowAnyException();
+        handler.handleCollectionRequestApproved(event);
+        verifyNoInteractions(collectionPlanService, collectionRequestService,
+                routeOptimizationService, vehicleService);
     }
 
     @Test
-    @DisplayName("CollectionRequestRejected eventini handle etmeli")
+    @DisplayName("CollectionRequestRejected: servisler çağrılmamalı (sadece loglama)")
     void handlesCollectionRequestRejected() {
         var event = new CollectionRequestRejected(1L, 2L, "Stok yetersiz", LocalDateTime.now());
-        assertThatCode(() -> handler.handleCollectionRequestRejected(event)).doesNotThrowAnyException();
+        handler.handleCollectionRequestRejected(event);
+        verifyNoInteractions(collectionPlanService, collectionRequestService,
+                routeOptimizationService, vehicleService);
     }
 
     @Test
-    @DisplayName("CollectionPlanGenerated eventini handle etmeli")
+    @DisplayName("CollectionPlanGenerated: servisler çağrılmamalı (sadece loglama)")
     void handlesCollectionPlanGenerated() {
         var event = new CollectionPlanGenerated(1L, new Distance(150), 100, 50, LocalDate.now(), LocalDateTime.now());
-        assertThatCode(() -> handler.handleCollectionPlanGenerated(event)).doesNotThrowAnyException();
+        handler.handleCollectionPlanGenerated(event);
+        verifyNoInteractions(collectionPlanService, collectionRequestService,
+                routeOptimizationService, vehicleService);
     }
 
     @Test
-    @DisplayName("RouteAssignedToVehicle eventini handle etmeli")
+    @DisplayName("RouteAssignedToVehicle: servisler çağrılmamalı (sadece loglama)")
     void handlesRouteAssignedToVehicle() {
         var event = new RouteAssignedToVehicle(1L, 2L, LocalDate.now(), LocalDateTime.now());
-        assertThatCode(() -> handler.handleRouteAssignedToVehicle(event)).doesNotThrowAnyException();
+        handler.handleRouteAssignedToVehicle(event);
+        verifyNoInteractions(collectionPlanService, collectionRequestService,
+                routeOptimizationService, vehicleService);
     }
 
     @Test
-    @DisplayName("CollectionStarted eventini handle etmeli")
+    @DisplayName("CollectionStarted: servisler çağrılmamalı (sadece loglama)")
     void handlesCollectionStarted() {
         var event = new CollectionStarted(1L, 2L, 3L, LocalDateTime.now());
-        assertThatCode(() -> handler.handleCollectionStarted(event)).doesNotThrowAnyException();
+        handler.handleCollectionStarted(event);
+        verifyNoInteractions(collectionPlanService, collectionRequestService,
+                routeOptimizationService, vehicleService);
     }
 
     @Test
-    @DisplayName("CollectionCompleted eventini handle etmeli")
+    @DisplayName("CollectionCompleted: servisler çağrılmamalı (sadece loglama)")
     void handlesCollectionCompleted() {
         var event = new CollectionCompleted(1L, 2L, 3L, 100, 50, LocalDateTime.now());
-        assertThatCode(() -> handler.handleCollectionCompleted(event)).doesNotThrowAnyException();
+        handler.handleCollectionCompleted(event);
+        verifyNoInteractions(collectionPlanService, collectionRequestService,
+                routeOptimizationService, vehicleService);
     }
 
     @Test
-    @DisplayName("VehicleRegistered eventini handle etmeli")
+    @DisplayName("VehicleRegistered: servisler çağrılmamalı (sadece loglama)")
     void handlesVehicleRegistered() {
         var event = new VehicleRegistered(1L, 2L, "34ABC001", LocalDateTime.now());
-        assertThatCode(() -> handler.handleVehicleRegistered(event)).doesNotThrowAnyException();
+        handler.handleVehicleRegistered(event);
+        verifyNoInteractions(collectionPlanService, collectionRequestService,
+                routeOptimizationService, vehicleService);
     }
 
     @Test
-    @DisplayName("DepotCreated eventini handle etmeli")
+    @DisplayName("DepotCreated: servisler çağrılmamalı (sadece loglama)")
     void handlesDepotCreated() {
         var event = new DepotCreated(1L, "Merkez Depo", new GeoCoordinates(41.0, 29.0), LocalDateTime.now());
-        assertThatCode(() -> handler.handleDepotCreated(event)).doesNotThrowAnyException();
+        handler.handleDepotCreated(event);
+        verifyNoInteractions(collectionPlanService, collectionRequestService,
+                routeOptimizationService, vehicleService);
     }
 
     @Test
