@@ -1,6 +1,8 @@
 package ardaaydinkilinc.Cam_Sise.analytics;
 
 import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +23,11 @@ public class AnalyticsController {
     private final AnalyticsService analyticsService;
     private final JwtUtil jwtUtil;
 
+    @Operation(
+            summary = "Sistem özeti",
+            description = "Tenant'a ait toplam bekleyen talep, aktif plan, stok özeti ve eşik aşan dolumcu sayısını döndürür. Sadece COMPANY_STAFF."
+    )
+    @ApiResponse(responseCode = "200", description = "Analitik özeti başarıyla döndürüldü")
     @GetMapping
     @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<AnalyticsSummary> getSummary(HttpServletRequest request) {

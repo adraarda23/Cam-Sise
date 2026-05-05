@@ -48,9 +48,8 @@ public class FillerStockController {
         return ResponseEntity.ok(stock);
     }
 
-    /**
-     * Record asset collection (when pool operator collects assets)
-     */
+    @Operation(summary = "Asset toplama kaydet", description = "Havuz operatörünün dolumcudan topladığı asset miktarını stoka yansıtır.")
+    @ApiResponse(responseCode = "200", description = "Toplama başarıyla kaydedildi")
     @PostMapping("/collection")
     @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<FillerStock> recordCollection(@RequestBody RecordCollectionRequest request) {
@@ -63,63 +62,64 @@ public class FillerStockController {
         return ResponseEntity.ok(stock);
     }
 
-    /**
-     * Update threshold for a stock
-     */
+    @Operation(summary = "Stok eşiğini güncelle", description = "Otomatik toplama talebini tetikleyen minimum stok eşiğini ayarlar. Sadece COMPANY_STAFF.")
+    @ApiResponse(responseCode = "200", description = "Eşik güncellendi")
+    @ApiResponse(responseCode = "404", description = "Stok kaydı bulunamadı")
     @PutMapping("/{fillerId}/{assetType}/threshold")
     @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<FillerStock> updateThreshold(
-            @PathVariable Long fillerId,
-            @PathVariable AssetType assetType,
+            @Parameter(description = "Dolumcu ID") @PathVariable Long fillerId,
+            @Parameter(description = "Asset tipi (PALLET veya SEPARATOR)") @PathVariable AssetType assetType,
             @RequestBody UpdateThresholdRequest request
     ) {
         FillerStock stock = fillerStockService.updateThreshold(fillerId, assetType, request.newThreshold);
         return ResponseEntity.ok(stock);
     }
 
-    /**
-     * Update loss rate for a stock
-     */
+    @Operation(summary = "Zaiyat oranını güncelle", description = "Stok kaydına ait zaiyat oranını manuel olarak günceller. Sadece COMPANY_STAFF.")
+    @ApiResponse(responseCode = "200", description = "Zaiyat oranı güncellendi")
+    @ApiResponse(responseCode = "404", description = "Stok kaydı bulunamadı")
     @PutMapping("/{fillerId}/{assetType}/loss-rate")
     @PreAuthorize("hasRole('COMPANY_STAFF')")
     public ResponseEntity<FillerStock> updateLossRate(
-            @PathVariable Long fillerId,
-            @PathVariable AssetType assetType,
+            @Parameter(description = "Dolumcu ID") @PathVariable Long fillerId,
+            @Parameter(description = "Asset tipi (PALLET veya SEPARATOR)") @PathVariable AssetType assetType,
             @RequestBody UpdateLossRateRequest request
     ) {
         FillerStock stock = fillerStockService.updateLossRate(fillerId, assetType, request.lossRatePercentage);
         return ResponseEntity.ok(stock);
     }
 
-    /**
-     * Get stock for a specific filler and asset type
-     */
+    @Operation(summary = "Stok kaydını getir", description = "Belirli dolumcu ve asset tipi için anlık stok durumunu döndürür.")
+    @ApiResponse(responseCode = "200", description = "Stok bilgisi döndürüldü")
+    @ApiResponse(responseCode = "404", description = "Stok kaydı bulunamadı")
     @GetMapping("/{fillerId}/{assetType}")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF', 'CUSTOMER')")
     public ResponseEntity<FillerStock> getStock(
-            @PathVariable Long fillerId,
-            @PathVariable AssetType assetType
+            @Parameter(description = "Dolumcu ID") @PathVariable Long fillerId,
+            @Parameter(description = "Asset tipi (PALLET veya SEPARATOR)") @PathVariable AssetType assetType
     ) {
         FillerStock stock = fillerStockService.getStock(fillerId, assetType);
         return ResponseEntity.ok(stock);
     }
 
-    /**
-     * Get all stocks for a filler
-     */
+    @Operation(summary = "Dolumcuya ait tüm stoklar", description = "Bir dolumcunun tüm asset tiplerine ait stok durumunu listeler.")
+    @ApiResponse(responseCode = "200", description = "Stok listesi döndürüldü")
     @GetMapping("/filler/{fillerId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF', 'CUSTOMER')")
-    public ResponseEntity<List<FillerStock>> getStocksByFiller(@PathVariable Long fillerId) {
+    public ResponseEntity<List<FillerStock>> getStocksByFiller(
+            @Parameter(description = "Dolumcu ID") @PathVariable Long fillerId) {
         List<FillerStock> stocks = fillerStockService.getStocksByFiller(fillerId);
         return ResponseEntity.ok(stocks);
     }
 
-    /**
-     * Get all stocks for a specific asset type
-     */
+    @Operation(summary = "Asset tipine göre stoklar", description = "Tenant'a ait tüm dolumcuların belirtilen asset tipindeki stok durumunu listeler. Sadece COMPANY_STAFF.")
+    @ApiResponse(responseCode = "200", description = "Stok listesi döndürüldü")
     @GetMapping("/asset-type/{assetType}")
     @PreAuthorize("hasRole('COMPANY_STAFF')")
-    public ResponseEntity<List<FillerStock>> getStocksByAssetType(@PathVariable AssetType assetType, HttpServletRequest httpRequest) {
+    public ResponseEntity<List<FillerStock>> getStocksByAssetType(
+            @Parameter(description = "Asset tipi (PALLET veya SEPARATOR)") @PathVariable AssetType assetType,
+            HttpServletRequest httpRequest) {
         Long poolOperatorId = jwtUtil.extractPoolOperatorId(httpRequest.getHeader("Authorization").substring(7));
         List<FillerStock> stocks = fillerStockService.getAllStocksByPoolOperatorId(poolOperatorId)
                 .stream().filter(s -> s.getAssetType() == assetType).toList();
