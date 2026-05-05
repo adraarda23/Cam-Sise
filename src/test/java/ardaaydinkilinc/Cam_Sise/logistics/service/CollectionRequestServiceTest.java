@@ -294,4 +294,105 @@ class CollectionRequestServiceTest {
             assertThat(result.getStatus()).isEqualTo(RequestStatus.COMPLETED);
         }
     }
+
+    @Nested
+    @DisplayName("findById")
+    class FindById {
+
+        @Test
+        @DisplayName("Talep bulunduğunda döndürmeli")
+        void returnsRequestWhenFound() {
+            CollectionRequest req = CollectionRequest.createManual(FILLER_ID, AssetType.PALLET, 100, USER_ID);
+            when(collectionRequestRepository.findById(1L)).thenReturn(Optional.of(req));
+
+            CollectionRequest result = service.findById(1L);
+
+            assertThat(result).isEqualTo(req);
+        }
+
+        @Test
+        @DisplayName("Talep bulunamazsa exception fırlatmalı")
+        void throwsWhenNotFound() {
+            when(collectionRequestRepository.findById(999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.findById(999L))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("findByFiller")
+    class FindByFiller {
+
+        @Test
+        @DisplayName("Status verilince filtreli liste döndürmeli")
+        void returnsRequestsByFillerWithStatus() {
+            CollectionRequest req = CollectionRequest.createManual(FILLER_ID, AssetType.PALLET, 100, USER_ID);
+            when(collectionRequestRepository.findByFillerIdAndStatus(FILLER_ID, RequestStatus.PENDING))
+                    .thenReturn(List.of(req));
+
+            List<CollectionRequest> result = service.findByFiller(FILLER_ID, RequestStatus.PENDING);
+
+            assertThat(result).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Status null ise tüm talepleri döndürmeli")
+        void returnsAllRequestsByFiller() {
+            CollectionRequest req = CollectionRequest.createManual(FILLER_ID, AssetType.PALLET, 100, USER_ID);
+            when(collectionRequestRepository.findByFillerId(FILLER_ID)).thenReturn(List.of(req));
+
+            List<CollectionRequest> result = service.findByFiller(FILLER_ID, null);
+
+            assertThat(result).hasSize(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("findByStatus")
+    class FindByStatus {
+
+        @Test
+        @DisplayName("Status'a göre talepleri döndürmeli")
+        void returnsRequestsByStatus() {
+            CollectionRequest req = CollectionRequest.createManual(FILLER_ID, AssetType.PALLET, 100, USER_ID);
+            when(collectionRequestRepository.findByStatus(RequestStatus.PENDING)).thenReturn(List.of(req));
+
+            List<CollectionRequest> result = service.findByStatus(RequestStatus.PENDING);
+
+            assertThat(result).hasSize(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("findByAssetType")
+    class FindByAssetType {
+
+        @Test
+        @DisplayName("AssetType'a göre talepleri döndürmeli")
+        void returnsRequestsByAssetType() {
+            CollectionRequest req = CollectionRequest.createManual(FILLER_ID, AssetType.PALLET, 100, USER_ID);
+            when(collectionRequestRepository.findByAssetType(AssetType.PALLET)).thenReturn(List.of(req));
+
+            List<CollectionRequest> result = service.findByAssetType(AssetType.PALLET);
+
+            assertThat(result).hasSize(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("findAll")
+    class FindAll {
+
+        @Test
+        @DisplayName("Tüm talepleri döndürmeli")
+        void returnsAllRequests() {
+            CollectionRequest req = CollectionRequest.createManual(FILLER_ID, AssetType.PALLET, 100, USER_ID);
+            when(collectionRequestRepository.findAll()).thenReturn(List.of(req));
+
+            List<CollectionRequest> result = service.findAll();
+
+            assertThat(result).hasSize(1);
+        }
+    }
 }

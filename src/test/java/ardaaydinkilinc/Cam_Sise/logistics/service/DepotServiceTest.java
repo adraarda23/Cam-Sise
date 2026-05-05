@@ -177,4 +177,35 @@ class DepotServiceTest {
             assertThat(result).hasSize(1);
         }
     }
+
+    @Nested
+    @DisplayName("findAllActive")
+    class FindAllActive {
+
+        @Test
+        @DisplayName("Sadece aktif depoları döndürmeli")
+        void returnsOnlyActiveDepots() {
+            when(depotRepository.findByActive(true)).thenReturn(List.of(depot));
+
+            List<Depot> result = service.findAllActive();
+
+            assertThat(result).hasSize(1);
+            verify(depotRepository).findByActive(true);
+        }
+    }
+
+    @Nested
+    @DisplayName("findAll")
+    class FindAll {
+
+        @Test
+        @DisplayName("Tüm depoları döndürmeli")
+        void returnsAllDepots() {
+            when(depotRepository.findAll()).thenReturn(List.of(depot));
+
+            List<Depot> result = service.findAll();
+
+            assertThat(result).hasSize(1);
+        }
+    }
 }

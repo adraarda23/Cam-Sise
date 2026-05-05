@@ -215,4 +215,104 @@ class CollectionPlanServiceTest {
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
+
+    @Nested
+    @DisplayName("findById")
+    class FindById {
+
+        @Test
+        @DisplayName("Plan bulunduğunda döndürmeli")
+        void returnsPlanWhenFound() {
+            when(collectionPlanRepository.findById(PLAN_ID)).thenReturn(Optional.of(generatedPlan));
+
+            CollectionPlan result = service.findById(PLAN_ID);
+
+            assertThat(result).isEqualTo(generatedPlan);
+        }
+
+        @Test
+        @DisplayName("Plan bulunamazsa exception fırlatmalı")
+        void throwsWhenNotFound() {
+            when(collectionPlanRepository.findById(999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.findById(999L))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("findByDepot")
+    class FindByDepot {
+
+        @Test
+        @DisplayName("Status verilince filtrelenmiş planları döndürmeli")
+        void returnsFilteredPlansWhenStatusProvided() {
+            when(collectionPlanRepository.findByDepotIdAndStatus(DEPOT_ID, PlanStatus.GENERATED))
+                    .thenReturn(List.of(generatedPlan));
+
+            List<CollectionPlan> result = service.findByDepot(DEPOT_ID, PlanStatus.GENERATED);
+
+            assertThat(result).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Status null ise tüm planları döndürmeli")
+        void returnsAllPlansWhenStatusIsNull() {
+            when(collectionPlanRepository.findByDepotId(DEPOT_ID)).thenReturn(List.of(generatedPlan));
+
+            List<CollectionPlan> result = service.findByDepot(DEPOT_ID, null);
+
+            assertThat(result).hasSize(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("findByStatus")
+    class FindByStatus {
+
+        @Test
+        @DisplayName("Status'a göre planları döndürmeli")
+        void returnsPlansByStatus() {
+            when(collectionPlanRepository.findByStatus(PlanStatus.GENERATED))
+                    .thenReturn(List.of(generatedPlan));
+
+            List<CollectionPlan> result = service.findByStatus(PlanStatus.GENERATED);
+
+            assertThat(result).hasSize(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("findByVehicle")
+    class FindByVehicle {
+
+        @Test
+        @DisplayName("Vehicle'a atanmış planları döndürmeli")
+        void returnsPlansByVehicle() {
+            when(collectionPlanRepository.findByAssignedVehicleId(VEHICLE_ID))
+                    .thenReturn(List.of(generatedPlan));
+
+            List<CollectionPlan> result = service.findByVehicle(VEHICLE_ID);
+
+            assertThat(result).hasSize(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("findByDateRange")
+    class FindByDateRange {
+
+        @Test
+        @DisplayName("Tarih aralığındaki planları döndürmeli")
+        void returnsPlansBetweenDates() {
+            LocalDate start = LocalDate.now();
+            LocalDate end = LocalDate.now().plusDays(7);
+            when(collectionPlanRepository.findByPlannedDateBetween(start, end))
+                    .thenReturn(List.of(generatedPlan));
+
+            List<CollectionPlan> result = service.findByDateRange(start, end);
+
+            assertThat(result).hasSize(1);
+        }
+    }
 }

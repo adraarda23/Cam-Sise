@@ -6,6 +6,7 @@ import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.LossRate;
 import ardaaydinkilinc.Cam_Sise.inventory.repository.FillerStockRepository;
 import ardaaydinkilinc.Cam_Sise.inventory.repository.LossRecordRepository;
 import ardaaydinkilinc.Cam_Sise.core.repository.FillerRepository;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -168,6 +169,121 @@ class FillerStockServiceTest {
             List<FillerStock> result = service.getStocksByFiller(FILLER_ID);
 
             assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("initializeStockForFiller")
+    class InitializeStockForFiller {
+
+        @Test
+        @DisplayName("PALLET ve SEPARATOR için iki kayıt oluşturmalı")
+        void createsTwoStockRecords() {
+            service.initializeStockForFiller(FILLER_ID);
+
+            verify(fillerStockRepository, times(2)).save(any(FillerStock.class));
+        }
+
+        @Test
+        @DisplayName("Biri PALLET, diğeri SEPARATOR olmalı")
+        void createsPalletAndSeparatorStocks() {
+            ArgumentCaptor<FillerStock> captor = ArgumentCaptor.forClass(FillerStock.class);
+
+            service.initializeStockForFiller(FILLER_ID);
+
+            verify(fillerStockRepository, times(2)).save(captor.capture());
+            List<AssetType> assetTypes = captor.getAllValues().stream()
+                    .map(FillerStock::getAssetType)
+                    .toList();
+            assertThat(assetTypes).containsExactlyInAnyOrder(AssetType.PALLET, AssetType.SEPARATOR);
+        }
+    }
+
+    @Nested
+    @DisplayName("updateLossRate")
+    class UpdateLossRate {
+
+        @Test
+        @DisplayName("Loss rate güncellenmeli ve kaydedilmeli")
+        void updatesLossRateAndSaves() {
+            when(fillerStockRepository.findByFillerIdAndAssetType(FILLER_ID, AssetType.PALLET))
+                    .thenReturn(Optional.of(palletStock));
+            when(fillerStockRepository.save(palletStock)).thenReturn(palletStock);
+
+            FillerStock result = service.updateLossRate(FILLER_ID, AssetType.PALLET, 8.0);
+
+            assertThat(result.getEstimatedLossRate().percentage()).isEqualTo(8.0);
+            verify(fillerStockRepository).save(palletStock);
+        }
+
+        @Test
+        @DisplayName("Stock bulunamazsa exception fırlatmalı")
+        void throwsWhenStockNotFound() {
+            when(fillerStockRepository.findByFillerIdAndAssetType(FILLER_ID, AssetType.PALLET))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.updateLossRate(FILLER_ID, AssetType.PALLET, 8.0))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("getStocksByAssetType")
+    class GetStocksByAssetType {
+
+        @Test
+        @DisplayName("AssetType'a göre stokları döndürmeli")
+        void returnsStocksByAssetType() {
+            when(fillerStockRepository.findByAssetType(AssetType.PALLET))
+                    .thenReturn(List.of(palletStock));
+
+            List<FillerStock> result = service.getStocksByAssetType(AssetType.PALLET);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getAssetType()).isEqualTo(AssetType.PALLET);
+        }
+
+        @Test
+        @DisplayName("Kayıt yoksa boş liste döndürmeli")
+        void returnsEmptyList() {
+            when(fillerStockRepository.findByAssetType(AssetType.SEPARATOR))
+                    .thenReturn(List.of());
+
+            List<FillerStock> result = service.getStocksByAssetType(AssetType.SEPARATOR);
+
+            assertThat(result).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("getAllStocks")
+    class GetAllStocks {
+
+        @Test
+        @DisplayName("Tüm stokları döndürmeli")
+        void returnsAllStocks() {
+            FillerStock sepStock = FillerStock.initialize(2L, AssetType.SEPARATOR, 50, new LossRate(3.0));
+            when(fillerStockRepository.findAll()).thenReturn(List.of(palletStock, sepStock));
+
+            List<FillerStock> result = service.getAllStocks();
+
+            assertThat(result).hasSize(2);
+        }
+    }
+
+    @Nested
+    @DisplayName("getAllStocksByPoolOperatorId")
+    class GetAllStocksByPoolOperatorId {
+
+        @Test
+        @DisplayName("PoolOperatorId'ye göre repository'e delege etmeli")
+        void delegatesToRepository() {
+            when(fillerStockRepository.findByPoolOperatorId(1L)).thenReturn(List.of(palletStock));
+
+            List<FillerStock> result = service.getAllStocksByPoolOperatorId(1L);
+
+            assertThat(result).hasSize(1);
+            verify(fillerStockRepository).findByPoolOperatorId(1L);
         }
     }
 }
