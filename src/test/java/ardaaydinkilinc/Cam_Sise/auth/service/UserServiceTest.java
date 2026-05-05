@@ -13,6 +13,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -329,6 +334,95 @@ class UserServiceTest {
 
             assertThatThrownBy(() -> service.deactivateUser(USER_ID))
                     .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("registerUser() — eksik branch'ler")
+    class RegisterUserAdditionalBranches {
+
+        @Test
+        @DisplayName("role=CUSTOMER, fillerId=null ise upsert bloğu atlanmalı")
+        void shouldSkipUpsertWhenFillerIdNull() {
+            when(userRepository.existsByUsername("newcustomer_nofiller")).thenReturn(false);
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            User result = service.registerUser(POOL_OPERATOR_ID, "newcustomer_nofiller", "sifre",
+                    "Müşteri", Role.CUSTOMER, null);
+
+            assertThat(result.getRole()).isEqualTo(Role.CUSTOMER);
+            verify(userRepository, never()).findByFillerIdAndActiveTrue(any());
+        }
+
+        @Test
+        @DisplayName("CUSTOMER upsert: mevcut müşteri farklı username ile ve o username alınmışsa exception fırlatmalı")
+        void shouldThrowWhenUpsertCustomerHasDifferentConflictingUsername() {
+            when(userRepository.findByFillerIdAndActiveTrue(FILLER_ID)).thenReturn(Optional.of(customerUser));
+            when(userRepository.existsByUsername("conflict_user")).thenReturn(true);
+
+            assertThatThrownBy(() -> service.registerUser(POOL_OPERATOR_ID, "conflict_user", "sifre",
+                    "Müşteri", Role.CUSTOMER, FILLER_ID))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("already exists");
+        }
+    }
+
+    @Nested
+    @DisplayName("updateUser() — eksik branch'ler")
+    class UpdateUserAdditionalBranches {
+
+        @Test
+        @DisplayName("fullName boş string ise güncellenmemeli")
+        void shouldNotUpdateFullNameWhenBlank() {
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(staffUser));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.updateUser(USER_ID, "", null);
+
+            assertThat(staffUser.getFullName()).isEqualTo("Ali Veli");
+            verify(passwordEncoder, never()).encode(any());
+        }
+
+        @Test
+        @DisplayName("password boş string ise güncellenmemeli")
+        void shouldNotUpdatePasswordWhenBlank() {
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(staffUser));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.updateUser(USER_ID, null, "");
+
+            verify(passwordEncoder, never()).encode(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("findByPoolOperatorIdPaged()")
+    class FindByPoolOperatorIdPaged {
+
+        @Test
+        @DisplayName("search null ise boş string ile sorgu yapılmalı")
+        void passesEmptyStringWhenSearchNull() {
+            Page<User> page = new PageImpl<>(List.of(staffUser));
+            ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
+            when(userRepository.findByPoolOperatorIdAndRoleFiltered(any(), any(), searchCaptor.capture(), any()))
+                    .thenReturn(page);
+
+            service.findByPoolOperatorIdPaged(POOL_OPERATOR_ID, null, null, 0, 10);
+
+            assertThat(searchCaptor.getValue()).isEqualTo("");
+        }
+
+        @Test
+        @DisplayName("search 'ali' ise 'ali' ile sorgu yapılmalı")
+        void passesSearchValueWhenProvided() {
+            Page<User> page = new PageImpl<>(List.of(staffUser));
+            ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
+            when(userRepository.findByPoolOperatorIdAndRoleFiltered(any(), any(), searchCaptor.capture(), any()))
+                    .thenReturn(page);
+
+            service.findByPoolOperatorIdPaged(POOL_OPERATOR_ID, null, "ali", 0, 10);
+
+            assertThat(searchCaptor.getValue()).isEqualTo("ali");
         }
     }
 }

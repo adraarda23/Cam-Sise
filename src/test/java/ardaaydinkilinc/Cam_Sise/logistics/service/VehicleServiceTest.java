@@ -352,4 +352,66 @@ class VehicleServiceTest {
             verify(vehicleRepository).findByPoolOperatorId(1L);
         }
     }
+
+    @Nested
+    @DisplayName("not-found dalları (eksik branch'ler)")
+    class NotFoundBranches {
+
+        @Test
+        @DisplayName("assignToRoute: araç bulunamazsa exception fırlatmalı")
+        void assignToRouteThrowsWhenNotFound() {
+            when(vehicleRepository.findById(999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.assignToRoute(999L, PLAN_ID, "Ali", "B99990", "05550001111"))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("departFromDepot: araç bulunamazsa exception fırlatmalı")
+        void departFromDepotThrowsWhenNotFound() {
+            when(vehicleRepository.findById(999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.departFromDepot(999L))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("returnToDepot: araç bulunamazsa exception fırlatmalı")
+        void returnToDepotThrowsWhenNotFound() {
+            when(vehicleRepository.findById(999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.returnToDepot(999L))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("changeStatus: araç bulunamazsa exception fırlatmalı")
+        void changeStatusThrowsWhenNotFound() {
+            when(vehicleRepository.findById(999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.changeStatus(999L, VehicleStatus.MAINTENANCE))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("changeStatus — ON_ROUTE boş plan listesi")
+    class ChangeStatusNoActivePlans {
+
+        @Test
+        @DisplayName("ON_ROUTE → MAINTENANCE, aktif plan yok → cancelPlan çağrılmamalı")
+        void onRouteToMaintenanceWithNoActivePlans() {
+            availableVehicle.assignToPlan(PLAN_ID);
+            availableVehicle.clearDomainEvents();
+
+            when(vehicleRepository.findById(VEHICLE_ID)).thenReturn(Optional.of(availableVehicle));
+            when(vehicleRepository.save(availableVehicle)).thenReturn(availableVehicle);
+            when(collectionPlanRepository.findByAssignedVehicleId(VEHICLE_ID)).thenReturn(List.of());
+
+            service.changeStatus(VEHICLE_ID, VehicleStatus.MAINTENANCE);
+
+            verify(collectionPlanRepository).findByAssignedVehicleId(VEHICLE_ID);
+            verify(collectionPlanRepository, never()).save(any());
+        }
+    }
 }
