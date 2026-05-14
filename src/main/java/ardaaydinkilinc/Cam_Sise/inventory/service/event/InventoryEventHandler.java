@@ -1,10 +1,14 @@
 package ardaaydinkilinc.Cam_Sise.inventory.service.event;
 
+import ardaaydinkilinc.Cam_Sise.analytics.anomaly.AnomalyDetectionService;
+import ardaaydinkilinc.Cam_Sise.analytics.anomaly.AnomalyResult;
+import ardaaydinkilinc.Cam_Sise.analytics.anomaly.StockAnomalyDetected;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerRegistered;
 import ardaaydinkilinc.Cam_Sise.inventory.service.FillerStockService;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.event.AssetCollected;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.event.AssetInflowRecorded;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.event.StockThresholdExceeded;
+import ardaaydinkilinc.Cam_Sise.shared.domain.event.DomainEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -22,6 +26,8 @@ public class InventoryEventHandler {
 
     private final FillerStockService fillerStockService;
     private final ardaaydinkilinc.Cam_Sise.logistics.service.CollectionRequestService collectionRequestService;
+    private final AnomalyDetectionService anomalyDetectionService;
+    private final DomainEventPublisher domainEventPublisher;
 
     /**
      * Initialize stock when a new filler is registered
@@ -29,14 +35,13 @@ public class InventoryEventHandler {
     @EventListener
     @Async
     public void handleFillerRegistered(FillerRegistered event) {
-        log.info("📦 Initializing stock for new filler: fillerId={}", event.poolOperatorId());
+        log.info("📦 Initializing stock for new filler: fillerId={}", event.fillerId());
 
         try {
-            // Initialize stock records for the new filler
-            fillerStockService.initializeStockForFiller(event.poolOperatorId());
-            log.info("✅ Stock initialized for filler: fillerId={}", event.poolOperatorId());
+            fillerStockService.initializeStockForFiller(event.fillerId());
+            log.info("✅ Stock initialized for filler: fillerId={}", event.fillerId());
         } catch (Exception e) {
-            log.error("❌ Failed to initialize stock for filler: fillerId={}", event.poolOperatorId(), e);
+            log.error("❌ Failed to initialize stock for filler: fillerId={}", event.fillerId(), e);
         }
     }
 
@@ -83,8 +88,21 @@ public class InventoryEventHandler {
                 event.quantity(),
                 event.newTotalQuantity());
 
-        // TODO: Update analytics/dashboard
-        // TODO: Notify filler of successful inflow recording
+        try {
+            AnomalyResult result = anomalyDetectionService.checkInflow(
+                    event.fillerId(),
+                    event.assetType(),
+                    event.quantity(),
+                    event.occurredAt());
+            if (result.isAnomaly()) {
+                log.warn("⚠️ Reactive anomaly: fillerId={}, asset={}, severity={}, z={}",
+                        result.fillerId(), result.assetType(), result.severity(), result.zScore());
+                domainEventPublisher.publish(StockAnomalyDetected.from(result));
+            }
+        } catch (Exception e) {
+            log.error("Reactive anomaly check failed for fillerId={}: {}",
+                    event.fillerId(), e.getMessage(), e);
+        }
     }
 
     /**

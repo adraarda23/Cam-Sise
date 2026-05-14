@@ -63,6 +63,15 @@ public class CollectionPlan extends AggregateRoot<Long> {
     @Column(name = "route_stops_json", columnDefinition = "TEXT")
     private String routeStopsJson;
 
+    /**
+     * Optional encoded route geometry (GeoJSON LineString as JSON array of [lat, lon] pairs).
+     * Populated when the underlying DistanceProvider returns geometry (e.g. OSRM).
+     * Used by the frontend RouteMap to draw the polyline along real roads
+     * instead of straight lines between stops.
+     */
+    @Column(name = "route_geometry_json", columnDefinition = "TEXT")
+    private String routeGeometryJson;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -103,6 +112,15 @@ public class CollectionPlan extends AggregateRoot<Long> {
         ));
 
         return plan;
+    }
+
+    /**
+     * Set the road geometry (called by RouteOptimizationService when the
+     * underlying DistanceProvider returns OSRM geometry).
+     */
+    public void setRouteGeometry(String routeGeometryJson) {
+        this.routeGeometryJson = routeGeometryJson;
+        this.updatedAt = LocalDateTime.now();
     }
 
     /**

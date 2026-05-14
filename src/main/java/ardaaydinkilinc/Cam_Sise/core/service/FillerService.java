@@ -1,7 +1,9 @@
 package ardaaydinkilinc.Cam_Sise.core.service;
 
 import ardaaydinkilinc.Cam_Sise.core.domain.Filler;
+import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerRegistered;
 import ardaaydinkilinc.Cam_Sise.core.repository.FillerRepository;
+import ardaaydinkilinc.Cam_Sise.shared.domain.event.DomainEventPublisher;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Address;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.ContactInfo;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.GeoCoordinates;
@@ -14,6 +16,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -27,6 +30,7 @@ import java.util.List;
 public class FillerService {
 
     private final FillerRepository fillerRepository;
+    private final DomainEventPublisher domainEventPublisher;
 
     /**
      * Register a new filler.
@@ -60,11 +64,21 @@ public class FillerService {
         ContactInfo contactInfo = new ContactInfo(phone, email, contactPersonName);
         TaxId taxId = taxIdValue != null ? new TaxId(taxIdValue) : null;
 
-        // Create filler (event is added to aggregate)
+        // Create filler (id henüz null)
         Filler filler = Filler.register(poolOperatorId, name, address, location, contactInfo, taxId);
 
-        // Save filler (JPA listener will automatically publish events)
+        // Save filler — Hibernate auto-generated id'yi atar
         filler = fillerRepository.save(filler);
+
+        // ID atandıktan sonra FillerRegistered event'ini elle publish ediyoruz.
+        // Bu sayede InventoryEventHandler doğru fillerId ile stok kayıtlarını oluşturabiliyor.
+        domainEventPublisher.publish(new FillerRegistered(
+                filler.getId(),
+                poolOperatorId,
+                name,
+                location,
+                LocalDateTime.now()
+        ));
 
         log.info("Filler registered successfully: id={}, name={}", filler.getId(), name);
 

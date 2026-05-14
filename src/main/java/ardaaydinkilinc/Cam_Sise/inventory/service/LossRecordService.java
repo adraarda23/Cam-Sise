@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -23,6 +24,7 @@ import java.util.List;
 public class LossRecordService {
 
     private final LossRecordRepository lossRecordRepository;
+    private final LossEstimationService lossEstimationService;
 
     /**
      * Create a new loss record with estimated rate.
@@ -128,5 +130,29 @@ public class LossRecordService {
     @Transactional(readOnly = true)
     public List<LossRecord> getLossRecordsByAssetType(AssetType assetType) {
         return lossRecordRepository.findByAssetType(assetType);
+    }
+
+    /**
+     * Recompute the estimated loss rate from the StockMovementHistory time-series.
+     * Creates the loss record on first call (no record exists yet).
+     */
+    public LossRecord recomputeEstimateFromHistory(Long fillerId, AssetType assetType, int windowDays) {
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(windowDays);
+        Period period = new Period(startDate, endDate);
+
+        var existing = lossRecordRepository.findByFillerIdAndAssetType(fillerId, assetType);
+        LossRate prior = existing.map(LossRecord::getEstimatedRate).orElse(null);
+
+        LossRate newEstimate = lossEstimationService.estimateRate(fillerId, assetType, windowDays, prior);
+
+        if (existing.isPresent()) {
+            LossRecord r = existing.get();
+            r.recalculateEstimatedRate(newEstimate, period);
+            return lossRecordRepository.save(r);
+        }
+
+        LossRecord created = LossRecord.createWithEstimate(fillerId, assetType, newEstimate, period);
+        return lossRecordRepository.save(created);
     }
 }

@@ -32,6 +32,9 @@ public class User extends AggregateRoot<Long> {
     @Column(nullable = false)
     private String fullName;
 
+    @Column(name = "email")
+    private String email;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
@@ -123,6 +126,11 @@ public class User extends AggregateRoot<Long> {
      */
     public void updatePassword(String newPassword) {
         this.password = newPassword;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void updateEmail(String newEmail) {
+        this.email = newEmail;
         this.updatedAt = LocalDateTime.now();
     }
 

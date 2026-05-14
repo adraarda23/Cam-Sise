@@ -9,9 +9,13 @@ import ardaaydinkilinc.Cam_Sise.logistics.domain.Depot;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.VehicleType;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.Capacity;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.DepotRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.VehicleTypeRepository;
+import ardaaydinkilinc.Cam_Sise.logistics.service.routing.OsrmDistanceProvider;
+import ardaaydinkilinc.Cam_Sise.logistics.service.routing.RouteSegment;
+import org.springframework.beans.factory.annotation.Autowired;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Distance;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Duration;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.GeoCoordinates;
@@ -43,11 +47,15 @@ public class RouteOptimizationService {
     private final DistanceCalculator distanceCalculator;
     private final RouteConstraints routeConstraints;
     private final CollectionPlanService collectionPlanService;
+    private final CollectionPlanRepository collectionPlanRepository;
     private final CollectionRequestRepository collectionRequestRepository;
     private final DepotRepository depotRepository;
     private final FillerRepository fillerRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
     private final ObjectMapper objectMapper;
+
+    @Autowired(required = false)
+    private OsrmDistanceProvider osrmProvider;
 
     /**
      * Generate optimized collection plan(s) for approved requests.
@@ -133,6 +141,8 @@ public class RouteOptimizationService {
                     plannedDate,
                     routeStopsJson
             );
+
+            persistRouteGeometry(plan, depot.getLocation(), solution.route());
 
             for (CollectionRequest request : approvedRequests) {
                 if (request.getStatus() == RequestStatus.APPROVED) {
@@ -451,6 +461,8 @@ public class RouteOptimizationService {
                 collectionRequestRepository.save(request);
             }
 
+            persistRouteGeometry(plan, depot.getLocation(), route.route());
+
             plans.add(plan);
 
             log.info("Created plan {}/{}: planId={}, stops={}, distance={} km, duration={} min, requests scheduled={}",
@@ -469,5 +481,125 @@ public class RouteOptimizationService {
         }
 
         return plans;
+    }
+
+    /**
+     * Walk the route depot → stops → depot and concatenate the geometry returned
+     * by the active {@link DistanceCalculator}. When the distance provider does
+     * not return geometry (Haversine default), this is effectively a no-op.
+     * Stored on the CollectionPlan so the frontend can draw road-aware polylines.
+     */
+    private void persistRouteGeometry(CollectionPlan plan, GeoCoordinates depotLocation,
+                                      List<CVRPOptimizer.CollectionNode> route) {
+        if (route == null || route.isEmpty()) return;
+
+        List<GeoCoordinates> sequence = new ArrayList<>();
+        sequence.add(depotLocation);
+        route.forEach(n -> sequence.add(n.location()));
+        sequence.add(depotLocation);
+
+        // Prefer a single OSRM multi-waypoint call — far faster and avoids
+        // per-segment timeouts on long routes (e.g. Bursa → Ağrı). Falls back
+        // to per-segment routing if OSRM is unavailable.
+        List<double[]> polyline = null;
+        if (osrmProvider != null) {
+            try {
+                List<GeoCoordinates> geometry = osrmProvider.routeGeometry(sequence);
+                if (geometry != null && !geometry.isEmpty()) {
+                    polyline = new ArrayList<>(geometry.size());
+                    for (GeoCoordinates c : geometry) {
+                        polyline.add(new double[]{c.latitude(), c.longitude()});
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Multi-waypoint OSRM failed: {}", e.getMessage());
+            }
+        }
+
+        // Per-segment fallback if multi-waypoint did not succeed.
+        if (polyline == null) {
+            polyline = new ArrayList<>();
+            boolean anyGeometry = false;
+            for (int i = 0; i < sequence.size() - 1; i++) {
+                try {
+                    RouteSegment seg = distanceCalculator.routeSegment(sequence.get(i), sequence.get(i + 1));
+                    if (seg.hasGeometry()) {
+                        anyGeometry = true;
+                        for (GeoCoordinates c : seg.geometry()) {
+                            polyline.add(new double[]{c.latitude(), c.longitude()});
+                        }
+                    } else {
+                        polyline.add(new double[]{sequence.get(i).latitude(), sequence.get(i).longitude()});
+                    }
+                } catch (Exception e) {
+                    log.debug("Per-segment geometry fetch failed: {}", e.getMessage());
+                    polyline.add(new double[]{sequence.get(i).latitude(), sequence.get(i).longitude()});
+                }
+            }
+            GeoCoordinates last = sequence.get(sequence.size() - 1);
+            polyline.add(new double[]{last.latitude(), last.longitude()});
+            if (!anyGeometry) {
+                // Nothing useful, no point persisting straight-line geometry.
+                return;
+            }
+        }
+
+        try {
+            String geometryJson = objectMapper.writeValueAsString(polyline);
+            plan.setRouteGeometry(geometryJson);
+            collectionPlanRepository.save(plan);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize route geometry: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Re-fetch road geometry for an existing plan. Useful when a plan was
+     * created while OSRM was disabled and the frontend now wants real road
+     * polylines.
+     *
+     * <p>Reads the persisted route stops, asks the active DistanceProvider for
+     * geometry between consecutive stops, and saves the result back on the plan.
+     * Returns the refreshed plan.
+     */
+    public CollectionPlan refreshRouteGeometry(Long planId) {
+        CollectionPlan plan = collectionPlanRepository.findById(planId)
+                .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + planId));
+
+        Depot depot = depotRepository.findById(plan.getDepotId())
+                .orElseThrow(() -> new IllegalArgumentException("Depot not found: " + plan.getDepotId()));
+
+        List<CVRPOptimizer.CollectionNode> route = parseStopsAsNodes(plan.getRouteStopsJson());
+        if (route.isEmpty()) {
+            log.warn("Plan {} has no parseable route stops — geometry refresh skipped", planId);
+            return plan;
+        }
+
+        persistRouteGeometry(plan, depot.getLocation(), route);
+        return collectionPlanRepository.findById(planId).orElse(plan);
+    }
+
+    private List<CVRPOptimizer.CollectionNode> parseStopsAsNodes(String routeStopsJson) {
+        List<CVRPOptimizer.CollectionNode> nodes = new ArrayList<>();
+        if (routeStopsJson == null || routeStopsJson.isBlank()) return nodes;
+        try {
+            List<Map<String, Object>> stops = objectMapper.readValue(
+                    routeStopsJson,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class));
+            for (Map<String, Object> stop : stops) {
+                Number lat = (Number) stop.get("latitude");
+                Number lon = (Number) stop.get("longitude");
+                Number fillerId = (Number) stop.get("fillerId");
+                if (lat == null || lon == null) continue;
+                nodes.add(new CVRPOptimizer.CollectionNode(
+                        fillerId != null ? fillerId.longValue() : null,
+                        new GeoCoordinates(lat.doubleValue(), lon.doubleValue()),
+                        new Capacity(0, 0)
+                ));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse routeStopsJson: {}", e.getMessage());
+        }
+        return nodes;
     }
 }

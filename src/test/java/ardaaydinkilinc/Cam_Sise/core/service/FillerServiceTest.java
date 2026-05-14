@@ -2,6 +2,7 @@ package ardaaydinkilinc.Cam_Sise.core.service;
 
 import ardaaydinkilinc.Cam_Sise.core.domain.Filler;
 import ardaaydinkilinc.Cam_Sise.core.repository.FillerRepository;
+import ardaaydinkilinc.Cam_Sise.shared.domain.event.DomainEventPublisher;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Address;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.ContactInfo;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.GeoCoordinates;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.*;
 class FillerServiceTest {
 
     @Mock private FillerRepository fillerRepository;
+    @Mock private DomainEventPublisher domainEventPublisher;
 
     @InjectMocks
     private FillerService service;

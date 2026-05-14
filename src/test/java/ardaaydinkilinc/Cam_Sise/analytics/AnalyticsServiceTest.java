@@ -9,6 +9,7 @@ import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
+import ardaaydinkilinc.Cam_Sise.notification.repository.NotificationRepository;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Distance;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Duration;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +34,7 @@ class AnalyticsServiceTest {
     @Mock private CollectionPlanRepository planRepo;
     @Mock private FillerStockRepository stockRepo;
     @Mock private FillerRepository fillerRepo;
+    @Mock private NotificationRepository notificationRepo;
 
     @InjectMocks
     private AnalyticsService service;

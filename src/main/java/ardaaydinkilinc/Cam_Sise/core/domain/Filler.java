@@ -93,13 +93,8 @@ public class Filler extends AggregateRoot<Long> {
         filler.createdAt = LocalDateTime.now();
         filler.updatedAt = LocalDateTime.now();
 
-        filler.addDomainEvent(new FillerRegistered(
-                poolOperatorId,
-                name,
-                location,
-                LocalDateTime.now()
-        ));
-
+        // Not: fillerId burada henüz null. FillerRegistered event'i save sonrasında
+        // FillerService tarafından id-eksiksiz olarak yayınlanır.
         return filler;
     }
 

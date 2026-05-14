@@ -4,6 +4,7 @@ import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.Capacity;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.GeoCoordinates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -20,6 +21,19 @@ public class CVRPOptimizer {
 
     private final DistanceCalculator distanceCalculator;
     private final RouteConstraints routeConstraints;
+
+    /**
+     * Constraint enforcement mode.
+     * <ul>
+     *   <li>{@code soft} (default): violations are logged but the route is kept.
+     *       Useful in early development when seed data is geographically spread out.</li>
+     *   <li>{@code hard}: violating routes are dropped from the result.
+     *       Production-leaning behaviour — guarantees no impossible plans get
+     *       saved to the database.</li>
+     * </ul>
+     */
+    @Value("${app.routing.constraints.mode:soft}")
+    private String constraintMode;
 
     /**
      * Collection request node for routing
@@ -417,7 +431,14 @@ public class CVRPOptimizer {
                     .reduce(new Capacity(0, 0), Capacity::add);
 
             int duration = routeConstraints.calculateTotalDuration(distance, optimizedRoute.size());
-            if (!routeConstraints.isDistanceAcceptable(distance) || !routeConstraints.isDurationAcceptable(duration)) {
+            boolean violates = !routeConstraints.isDistanceAcceptable(distance)
+                    || !routeConstraints.isDurationAcceptable(duration);
+            if (violates) {
+                if ("hard".equalsIgnoreCase(constraintMode)) {
+                    log.warn("Route violates hard constraints (distance={} km, duration={} min) — dropped",
+                            String.format("%.2f", distance), duration);
+                    continue;
+                }
                 log.warn("Route exceeds soft constraints (distance={} km, duration={} min) — included anyway",
                         String.format("%.2f", distance), duration);
             }
@@ -483,14 +504,16 @@ public class CVRPOptimizer {
             return false;
         }
 
-        // Clarke-Wright: merged_distance = r1 + r2 - saving
-        // (saving = d(depot,i) + d(depot,j) - d(i,j), so merged avoids two depot returns)
-        double estimatedDistance = r1.distance + r2.distance - savingAmount;
-        int estimatedStops = r1.nodes.size() + r2.nodes.size();
-        int estimatedDuration = routeConstraints.calculateTotalDuration(estimatedDistance, estimatedStops);
-
-        return routeConstraints.isDistanceAcceptable(estimatedDistance) &&
-                routeConstraints.isDurationAcceptable(estimatedDuration);
+        // Soft mode: kapasite uygunsa birleştir; mesafe/süre kısıtı yalnızca uyarı seviyesinde.
+        // Hard mode: kısıtlar gerçekten merge'i engellesin.
+        if ("hard".equalsIgnoreCase(constraintMode)) {
+            double estimatedDistance = r1.distance + r2.distance - savingAmount;
+            int estimatedStops = r1.nodes.size() + r2.nodes.size();
+            int estimatedDuration = routeConstraints.calculateTotalDuration(estimatedDistance, estimatedStops);
+            return routeConstraints.isDistanceAcceptable(estimatedDistance) &&
+                    routeConstraints.isDurationAcceptable(estimatedDuration);
+        }
+        return true;
     }
 
     /**

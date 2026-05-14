@@ -1,6 +1,7 @@
 package ardaaydinkilinc.Cam_Sise.logistics.controller;
 
 import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionPlanService;
+import ardaaydinkilinc.Cam_Sise.logistics.service.RouteOptimizationService;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
 import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
@@ -33,6 +34,7 @@ import java.util.List;
 public class CollectionPlanController {
 
     private final CollectionPlanService collectionPlanService;
+    private final RouteOptimizationService routeOptimizationService;
     private final JwtUtil jwtUtil;
 
     /**
@@ -147,11 +149,23 @@ public class CollectionPlanController {
     @ApiResponse(responseCode = "200", description = "Plan başarıyla getirildi")
     @ApiResponse(responseCode = "404", description = "Plan bulunamadı")
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    @PreAuthorize("hasAnyRole('COMPANY_STAFF', 'CUSTOMER')")
     public ResponseEntity<CollectionPlan> getPlan(
             @Parameter(description = "Toplama planı ID", example = "1") @PathVariable Long id
     ) {
         CollectionPlan plan = collectionPlanService.findById(id);
+        return ResponseEntity.ok(plan);
+    }
+
+    @Operation(
+            summary = "Rota geometrisini yenile (OSRM)",
+            description = "Mevcut planın yol-takipli polyline'ını OSRM üzerinden yeniden hesaplar ve plana kaydeder. " +
+                    "Plan OSRM kapalıyken oluşturulmuşsa veya rota değişmişse kullanışlıdır."
+    )
+    @PostMapping("/{id}/refresh-geometry")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<CollectionPlan> refreshGeometry(@PathVariable Long id) {
+        CollectionPlan plan = routeOptimizationService.refreshRouteGeometry(id);
         return ResponseEntity.ok(plan);
     }
 
@@ -164,7 +178,7 @@ public class CollectionPlanController {
     )
     @ApiResponse(responseCode = "200", description = "Plan listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    @PreAuthorize("hasAnyRole('COMPANY_STAFF', 'CUSTOMER')")
     public ResponseEntity<PageResponse<CollectionPlan>> getAllPlans(
             @Parameter(description = "Plan durumuna göre filtrele") @RequestParam(required = false) PlanStatus status,
             @Parameter(description = "Başlangıç tarihi") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,

@@ -36,7 +36,7 @@ class InventoryEventHandlerTest {
     @Test
     @DisplayName("FillerRegistered eventinde stok başlatmalı")
     void handlesFillerRegisteredSuccessfully() {
-        var event = new FillerRegistered(1L, "Test Dolumcu",
+        var event = new FillerRegistered(1L, 5L, "Test Dolumcu",
                 new GeoCoordinates(41.0, 29.0), LocalDateTime.now());
 
         handler.handleFillerRegistered(event);
@@ -47,7 +47,7 @@ class InventoryEventHandlerTest {
     @Test
     @DisplayName("FillerRegistered eventinde stok başlatma hatası loglanmalı")
     void handlesFillerRegisteredWithError() {
-        var event = new FillerRegistered(1L, "Test Dolumcu",
+        var event = new FillerRegistered(1L, 5L, "Test Dolumcu",
                 new GeoCoordinates(41.0, 29.0), LocalDateTime.now());
         doThrow(new RuntimeException("DB error")).when(fillerStockService).initializeStockForFiller(anyLong());
 

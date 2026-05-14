@@ -43,7 +43,9 @@ public class FillerStock extends AggregateRoot<Long> {
 
     @Embedded
     @AttributeOverrides({
-            @AttributeOverride(name = "percentage", column = @Column(name = "estimated_loss_rate"))
+            @AttributeOverride(name = "percentage", column = @Column(name = "estimated_loss_rate")),
+            @AttributeOverride(name = "stdDev", column = @Column(name = "estimated_loss_std_dev")),
+            @AttributeOverride(name = "sampleSize", column = @Column(name = "estimated_loss_sample_size"))
     })
     private LossRate estimatedLossRate;
 

@@ -1,8 +1,10 @@
 package ardaaydinkilinc.Cam_Sise.inventory.controller;
 
 import ardaaydinkilinc.Cam_Sise.inventory.service.FillerStockService;
+import ardaaydinkilinc.Cam_Sise.inventory.service.StockForecastService;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
+import ardaaydinkilinc.Cam_Sise.shared.domain.vo.ConfidenceInterval;
 import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +31,7 @@ import java.util.List;
 public class FillerStockController {
 
     private final FillerStockService fillerStockService;
+    private final StockForecastService stockForecastService;
     private final JwtUtil jwtUtil;
 
     @Operation(
@@ -143,6 +146,34 @@ public class FillerStockController {
         return ResponseEntity.ok(fillerStockService.findByPoolOperatorIdPaged(poolOperatorId, search, page, size));
     }
 
+    @Operation(
+            summary = "Stok tahmini (güven aralığı ile)",
+            description = "Geçmiş hareketlere dayalı moving-average ile horizonDays gün sonrası için " +
+                          "tahmini stok miktarı ve %95 güven aralığını döndürür."
+    )
+    @ApiResponse(responseCode = "200", description = "Tahmin döndürüldü")
+    @ApiResponse(responseCode = "404", description = "Stok kaydı bulunamadı")
+    @GetMapping("/{fillerId}/{assetType}/forecast")
+    @PreAuthorize("hasAnyRole('ADMIN', 'COMPANY_STAFF', 'CUSTOMER')")
+    public ResponseEntity<ForecastResponse> forecast(
+            @Parameter(description = "Dolumcu ID") @PathVariable Long fillerId,
+            @Parameter(description = "Asset tipi (PALLET veya SEPARATOR)") @PathVariable AssetType assetType,
+            @Parameter(description = "Tahmin ufku (gün)") @RequestParam(defaultValue = "7") int days
+    ) {
+        ConfidenceInterval ci = stockForecastService.forecast(fillerId, assetType, days);
+        int daysToThreshold = stockForecastService.estimateDaysUntilThreshold(fillerId, assetType);
+        return ResponseEntity.ok(new ForecastResponse(
+                ci.mean(),
+                ci.stdDev(),
+                ci.lowerBound(),
+                ci.upperBound(),
+                ci.sampleSize(),
+                ci.confidenceLevel(),
+                ci.formatted(),
+                daysToThreshold
+        ));
+    }
+
     // ===== DTOs =====
 
     public record RecordInflowRequest(
@@ -150,6 +181,17 @@ public class FillerStockController {
             AssetType assetType,
             int quantity,
             String referenceId
+    ) {}
+
+    public record ForecastResponse(
+            double mean,
+            double stdDev,
+            double lowerBound,
+            double upperBound,
+            int sampleSize,
+            double confidenceLevel,
+            String formatted,
+            int daysUntilThreshold
     ) {}
 
     public record RecordCollectionRequest(

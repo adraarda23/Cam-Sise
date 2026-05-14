@@ -43,7 +43,7 @@ class CoreEventHandlerTest {
     @Test
     @DisplayName("FillerRegistered eventini handle etmeli")
     void handlesFillerRegistered() {
-        var event = new FillerRegistered(1L, "Test Dolumcu",
+        var event = new FillerRegistered(10L, 1L, "Test Dolumcu",
                 new GeoCoordinates(41.0, 29.0), LocalDateTime.now());
         assertThatCode(() -> handler.handleFillerRegistered(event)).doesNotThrowAnyException();
     }

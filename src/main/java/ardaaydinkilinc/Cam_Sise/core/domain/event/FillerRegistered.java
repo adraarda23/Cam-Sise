@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
  * Event fired when a new filler is registered
  */
 public record FillerRegistered(
+        Long fillerId,
         Long poolOperatorId,
         String fillerName,
         GeoCoordinates location,

@@ -1,10 +1,12 @@
 package ardaaydinkilinc.Cam_Sise.inventory.service;
 
 import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
+import ardaaydinkilinc.Cam_Sise.inventory.domain.StockMovementHistory;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.LossRate;
 import ardaaydinkilinc.Cam_Sise.inventory.repository.FillerStockRepository;
 import ardaaydinkilinc.Cam_Sise.inventory.repository.LossRecordRepository;
+import ardaaydinkilinc.Cam_Sise.inventory.repository.StockMovementHistoryRepository;
 import ardaaydinkilinc.Cam_Sise.core.repository.FillerRepository;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,7 @@ class FillerStockServiceTest {
     @Mock private FillerStockRepository fillerStockRepository;
     @Mock private FillerRepository fillerRepository;
     @Mock private LossRecordRepository lossRecordRepository;
+    @Mock private StockMovementHistoryRepository movementHistoryRepository;
 
     @InjectMocks
     private FillerStockService service;

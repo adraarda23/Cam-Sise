@@ -1,7 +1,15 @@
 package ardaaydinkilinc.Cam_Sise.logistics.controller;
 
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.Capacity;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.service.RouteOptimizationService;
+import ardaaydinkilinc.Cam_Sise.logistics.service.fleet.FleetComposition;
+import ardaaydinkilinc.Cam_Sise.logistics.service.fleet.VehicleAssignmentService;
+import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,6 +37,9 @@ import java.util.List;
 public class RouteOptimizationController {
 
     private final RouteOptimizationService routeOptimizationService;
+    private final VehicleAssignmentService vehicleAssignmentService;
+    private final CollectionRequestRepository collectionRequestRepository;
+    private final JwtUtil jwtUtil;
 
     /**
      * Generate optimized collection plan(s) for all approved requests.
@@ -166,6 +177,46 @@ public class RouteOptimizationController {
 
             @Schema(description = "Maksimum kullanılacak araç sayısı (varsayılan: 10)", example = "5")
             Integer maxVehicles
+    ) {}
+
+    @Operation(
+            summary = "Filo öneri kartları",
+            description = "Onaylı talepleri toplamak için sistem tarafından önerilen 2-3 alternatif filo kompozisyonu döndürür (en ucuz / en az araç / dengeli). " +
+                    "Kullanıcı UI'da bu kartlardan birini seçerek devam eder."
+    )
+    @ApiResponse(responseCode = "200", description = "Önerilen filo kompozisyonları")
+    @PostMapping("/suggest-fleet")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<List<FleetComposition>> suggestFleet(
+            @RequestBody SuggestFleetRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        Long poolOperatorId = jwtUtil.extractPoolOperatorId(
+                httpRequest.getHeader("Authorization").substring(7));
+
+        List<CollectionRequest> approved = collectionRequestRepository
+                .findByStatus(RequestStatus.APPROVED);
+        int totalPallets = approved.stream()
+                .filter(r -> r.getAssetType() == ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType.PALLET)
+                .mapToInt(CollectionRequest::getEstimatedQuantity).sum();
+        int totalSeparators = approved.stream()
+                .filter(r -> r.getAssetType() == ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType.SEPARATOR)
+                .mapToInt(CollectionRequest::getEstimatedQuantity).sum();
+        Capacity demand = new Capacity(totalPallets, totalSeparators);
+
+        double estimatedKm = request.estimatedRouteKm != null ? request.estimatedRouteKm : 0.0;
+
+        List<FleetComposition> compositions = vehicleAssignmentService.suggest(
+                poolOperatorId, demand, estimatedKm);
+        return ResponseEntity.ok(compositions);
+    }
+
+    @Schema(description = "Filo öneri request DTO")
+    public record SuggestFleetRequest(
+            @Schema(description = "Depo ID", example = "1")
+            Long depotId,
+            @Schema(description = "Tahmini toplam rota uzunluğu (km) — maliyet hesabı için", example = "350")
+            Double estimatedRouteKm
     ) {}
 
     @Schema(description = "Çoklu araç rota optimizasyonu response DTO")

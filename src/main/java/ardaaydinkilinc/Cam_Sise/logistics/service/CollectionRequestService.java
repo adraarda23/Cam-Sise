@@ -67,12 +67,8 @@ public class CollectionRequestService {
         log.info("Creating manual collection request: fillerId={}, assetType={}, quantity={}, userId={}",
                 fillerId, assetType, estimatedQuantity, requestingUserId);
 
-        // Enforce minimum request quantity
-        int minQty = companySettingsService.getSettings(poolOperatorId).getMinQty(assetType);
-        if (estimatedQuantity < minQty) {
-            throw new BusinessRuleViolationException(
-                "Minimum toplama talebi " + minQty + " adettir. Talep edilen: " + estimatedQuantity
-            );
+        if (estimatedQuantity <= 0) {
+            throw new BusinessRuleViolationException("Talep miktarı sıfırdan büyük olmalı");
         }
 
         // Get current stock
@@ -90,6 +86,18 @@ public class CollectionRequestService {
                 .filter(r -> r.getStatus() == RequestStatus.PENDING)
                 .findFirst()
                 .orElse(null);
+
+        // Enforce minimum request quantity ONLY for the first request. If a PENDING
+        // request already exists, the user is just topping it up — the merged total
+        // is guaranteed to be >= minQty because the original PENDING already passed
+        // the gate. Forcing minQty here would mean the customer cannot add even a
+        // small top-up (a usability bug reported during demo).
+        int minQty = companySettingsService.getSettings(poolOperatorId).getMinQty(assetType);
+        if (existingPendingRequest == null && estimatedQuantity < minQty) {
+            throw new BusinessRuleViolationException(
+                "Minimum toplama talebi " + minQty + " adettir. Talep edilen: " + estimatedQuantity
+            );
+        }
 
         if (existingPendingRequest != null) {
             // MERGE: Update existing PENDING request

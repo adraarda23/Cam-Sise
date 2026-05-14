@@ -178,7 +178,7 @@ public class VehicleController {
     )
     @ApiResponse(responseCode = "200", description = "Araç listesi başarıyla döndürüldü")
     @GetMapping
-    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    @PreAuthorize("hasAnyRole('COMPANY_STAFF', 'CUSTOMER')")
     public ResponseEntity<PageResponse<Vehicle>> getAllVehicles(
             @Parameter(description = "Araç durumuna göre filtrele") @RequestParam(required = false) VehicleStatus status,
             @RequestParam(defaultValue = "0") int page,
