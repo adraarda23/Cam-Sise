@@ -136,7 +136,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        User user = userService.updateUser(userId, request.fullName, request.password);
+        User user = userService.updateUser(userId, request.fullName, request.password, request.email);
         return ResponseEntity.ok(toResponse(user));
     }
 
@@ -217,6 +217,9 @@ public class UserController {
             String fullName,
 
             @Schema(description = "Yeni şifre (boş bırakılırsa değişmez)")
-            String password
+            String password,
+
+            @Schema(description = "Yeni e-posta (bildirim göndermek için kullanılır)")
+            String email
     ) {}
 }

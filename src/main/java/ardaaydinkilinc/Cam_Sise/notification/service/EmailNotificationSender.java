@@ -32,6 +32,9 @@ public class EmailNotificationSender {
     @Value("${app.notifications.email.subject-prefix:[Cam-Sise]}")
     private String subjectPrefix;
 
+    @Value("${app.notifications.email.base-url:}")
+    private String baseUrl;
+
     public void send(Notification notification, String toAddress) {
         if (toAddress == null || toAddress.isBlank()) {
             log.debug("Skipping email — no recipient address for notification {}", notification.getId());
@@ -66,9 +69,25 @@ public class EmailNotificationSender {
             sb.append(n.getBody()).append("\n\n");
         }
         if (n.getActionUrl() != null && !n.getActionUrl().isBlank()) {
-            sb.append("Detay için: ").append(n.getActionUrl()).append("\n\n");
+            sb.append("Detay için: ").append(buildAbsoluteUrl(n.getActionUrl())).append("\n\n");
         }
         sb.append("—\nCam-Sise Bildirim Sistemi");
         return sb.toString();
+    }
+
+    /**
+     * actionUrl ham bir path ("/requests") ise yapılandırılmış base URL ile birleştir.
+     * Zaten http(s):// ile başlıyorsa olduğu gibi bırak.
+     */
+    private String buildAbsoluteUrl(String actionUrl) {
+        if (actionUrl.startsWith("http://") || actionUrl.startsWith("https://")) {
+            return actionUrl;
+        }
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return actionUrl;
+        }
+        String trimmedBase = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        String trimmedPath = actionUrl.startsWith("/") ? actionUrl : "/" + actionUrl;
+        return trimmedBase + trimmedPath;
     }
 }

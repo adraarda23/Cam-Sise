@@ -131,6 +131,14 @@ public class UserService {
      * Update user name and optionally password.
      */
     public User updateUser(Long userId, String fullName, String newRawPassword) {
+        return updateUser(userId, fullName, newRawPassword, null);
+    }
+
+    /**
+     * Update user name, optionally password, optionally email.
+     * Email field is used for outgoing notifications (anomaly, threshold, etc.).
+     */
+    public User updateUser(Long userId, String fullName, String newRawPassword, String email) {
         log.info("Updating user: userId={}", userId);
 
         User user = userRepository.findById(userId)
@@ -141,6 +149,9 @@ public class UserService {
         }
         if (newRawPassword != null && !newRawPassword.isBlank()) {
             user.updatePassword(passwordEncoder.encode(newRawPassword));
+        }
+        if (email != null && !email.isBlank()) {
+            user.updateEmail(email);
         }
 
         user = userRepository.save(user);

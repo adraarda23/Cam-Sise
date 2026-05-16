@@ -484,73 +484,95 @@ public class RouteOptimizationService {
     }
 
     /**
-     * Walk the route depot → stops → depot and concatenate the geometry returned
-     * by the active {@link DistanceCalculator}. When the distance provider does
+     * Walk the route depot → stop1 → … → stopN and concatenate the geometry
+     * returned by the active {@link DistanceCalculator}. When the provider does
      * not return geometry (Haversine default), this is effectively a no-op.
-     * Stored on the CollectionPlan so the frontend can draw road-aware polylines.
+     *
+     * <p>Dönüş bacağı (son durak → depo) BİLEREK çizilmez: OSRM gidiş/dönüşü
+     * tek-yön cadde / otoyol yönü farkından farklı yollardan döndürebiliyor ve
+     * harita üzerinde "iki çizgi ayrışıp tekrar birleşiyor" görünümü oluşuyordu.
+     * Round-trip mesafesi zaten CVRP tarafında hesaplanıyor; bu yalnızca görsel.
      */
     private void persistRouteGeometry(CollectionPlan plan, GeoCoordinates depotLocation,
                                       List<CVRPOptimizer.CollectionNode> route) {
         if (route == null || route.isEmpty()) return;
 
-        List<GeoCoordinates> sequence = new ArrayList<>();
-        sequence.add(depotLocation);
-        route.forEach(n -> sequence.add(n.location()));
-        sequence.add(depotLocation);
+        // Gidiş: depo → d1 → … → dN
+        List<GeoCoordinates> outboundSeq = new ArrayList<>();
+        outboundSeq.add(depotLocation);
+        route.forEach(n -> outboundSeq.add(n.location()));
 
-        // Prefer a single OSRM multi-waypoint call — far faster and avoids
-        // per-segment timeouts on long routes (e.g. Bursa → Ağrı). Falls back
-        // to per-segment routing if OSRM is unavailable.
-        List<double[]> polyline = null;
+        // Dönüş: dN → depo (kendi en kısa yolu — retrace değil)
+        List<GeoCoordinates> returnSeq = List.of(
+                route.get(route.size() - 1).location(),
+                depotLocation
+        );
+
+        List<double[]> outbound = fetchPolyline(outboundSeq);
+        List<double[]> returnLeg = fetchPolyline(returnSeq);
+
+        if (outbound == null && returnLeg == null) {
+            // Hiç gerçek geometry yok — düz çizgi kaydetmenin anlamı yok.
+            return;
+        }
+
+        try {
+            // Yeni şema: {"outbound":[[lat,lng]...], "return":[[lat,lng]...]}
+            // Eski düz-dizi şeması frontend'de geriye dönük desteklenir.
+            java.util.Map<String, List<double[]>> geometry = new java.util.LinkedHashMap<>();
+            geometry.put("outbound", outbound != null ? outbound : List.of());
+            geometry.put("return", returnLeg != null ? returnLeg : List.of());
+            plan.setRouteGeometry(objectMapper.writeValueAsString(geometry));
+            collectionPlanRepository.save(plan);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize route geometry: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Verilen waypoint dizisi için yol-takipli polyline döndürür.
+     * Önce tek OSRM multi-waypoint çağrısı (hızlı), olmazsa segment-segment fallback.
+     * Hiç gerçek geometry üretilemezse {@code null} döner.
+     */
+    private List<double[]> fetchPolyline(List<GeoCoordinates> sequence) {
+        if (sequence == null || sequence.size() < 2) return null;
+
         if (osrmProvider != null) {
             try {
                 List<GeoCoordinates> geometry = osrmProvider.routeGeometry(sequence);
                 if (geometry != null && !geometry.isEmpty()) {
-                    polyline = new ArrayList<>(geometry.size());
+                    List<double[]> polyline = new ArrayList<>(geometry.size());
                     for (GeoCoordinates c : geometry) {
                         polyline.add(new double[]{c.latitude(), c.longitude()});
                     }
+                    return polyline;
                 }
             } catch (Exception e) {
                 log.warn("Multi-waypoint OSRM failed: {}", e.getMessage());
             }
         }
 
-        // Per-segment fallback if multi-waypoint did not succeed.
-        if (polyline == null) {
-            polyline = new ArrayList<>();
-            boolean anyGeometry = false;
-            for (int i = 0; i < sequence.size() - 1; i++) {
-                try {
-                    RouteSegment seg = distanceCalculator.routeSegment(sequence.get(i), sequence.get(i + 1));
-                    if (seg.hasGeometry()) {
-                        anyGeometry = true;
-                        for (GeoCoordinates c : seg.geometry()) {
-                            polyline.add(new double[]{c.latitude(), c.longitude()});
-                        }
-                    } else {
-                        polyline.add(new double[]{sequence.get(i).latitude(), sequence.get(i).longitude()});
+        List<double[]> polyline = new ArrayList<>();
+        boolean anyGeometry = false;
+        for (int i = 0; i < sequence.size() - 1; i++) {
+            try {
+                RouteSegment seg = distanceCalculator.routeSegment(sequence.get(i), sequence.get(i + 1));
+                if (seg.hasGeometry()) {
+                    anyGeometry = true;
+                    for (GeoCoordinates c : seg.geometry()) {
+                        polyline.add(new double[]{c.latitude(), c.longitude()});
                     }
-                } catch (Exception e) {
-                    log.debug("Per-segment geometry fetch failed: {}", e.getMessage());
+                } else {
                     polyline.add(new double[]{sequence.get(i).latitude(), sequence.get(i).longitude()});
                 }
-            }
-            GeoCoordinates last = sequence.get(sequence.size() - 1);
-            polyline.add(new double[]{last.latitude(), last.longitude()});
-            if (!anyGeometry) {
-                // Nothing useful, no point persisting straight-line geometry.
-                return;
+            } catch (Exception e) {
+                log.debug("Per-segment geometry fetch failed: {}", e.getMessage());
+                polyline.add(new double[]{sequence.get(i).latitude(), sequence.get(i).longitude()});
             }
         }
-
-        try {
-            String geometryJson = objectMapper.writeValueAsString(polyline);
-            plan.setRouteGeometry(geometryJson);
-            collectionPlanRepository.save(plan);
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize route geometry: {}", e.getMessage());
-        }
+        GeoCoordinates last = sequence.get(sequence.size() - 1);
+        polyline.add(new double[]{last.latitude(), last.longitude()});
+        return anyGeometry ? polyline : null;
     }
 
     /**

@@ -154,9 +154,9 @@ class UserControllerTest {
         @DisplayName("200 döndürmeli ve kullanıcıyı güncellemeli")
         void shouldReturn200WhenUpdateUser() throws Exception {
             when(userService.findById(1L)).thenReturn(staffUser);
-            when(userService.updateUser(eq(1L), any(), any())).thenReturn(staffUser);
+            when(userService.updateUser(eq(1L), any(), any(), any())).thenReturn(staffUser);
 
-            var body = new UserController.UpdateUserRequest("Yeni Ad", null);
+            var body = new UserController.UpdateUserRequest("Yeni Ad", null, null);
 
             mockMvc.perform(put("/api/users/1")
                             .header("Authorization", AUTH_HEADER)

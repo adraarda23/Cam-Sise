@@ -1,5 +1,6 @@
 package ardaaydinkilinc.Cam_Sise.inventory.controller;
 
+import ardaaydinkilinc.Cam_Sise.auth.repository.UserRepository;
 import ardaaydinkilinc.Cam_Sise.inventory.service.FillerStockService;
 import ardaaydinkilinc.Cam_Sise.inventory.service.StockForecastService;
 import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
@@ -7,6 +8,8 @@ import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.ConfidenceInterval;
 import ardaaydinkilinc.Cam_Sise.shared.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,6 +36,7 @@ public class FillerStockController {
     private final FillerStockService fillerStockService;
     private final StockForecastService stockForecastService;
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     @Operation(
             summary = "Asset girişi kaydet",
@@ -65,16 +69,34 @@ public class FillerStockController {
         return ResponseEntity.ok(stock);
     }
 
-    @Operation(summary = "Stok eşiğini güncelle", description = "Otomatik toplama talebini tetikleyen minimum stok eşiğini ayarlar. Sadece COMPANY_STAFF.")
+    @Operation(summary = "Stok eşiğini güncelle",
+            description = "Otomatik toplama talebini tetikleyen minimum stok eşiğini ayarlar. " +
+                    "COMPANY_STAFF tüm dolumcuların eşiklerini değiştirebilir; CUSTOMER yalnızca kendi dolumcusununkini.")
     @ApiResponse(responseCode = "200", description = "Eşik güncellendi")
+    @ApiResponse(responseCode = "403", description = "Yetkisiz dolumcu üzerinde işlem")
     @ApiResponse(responseCode = "404", description = "Stok kaydı bulunamadı")
     @PutMapping("/{fillerId}/{assetType}/threshold")
-    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    @PreAuthorize("hasAnyRole('COMPANY_STAFF', 'CUSTOMER')")
     public ResponseEntity<FillerStock> updateThreshold(
             @Parameter(description = "Dolumcu ID") @PathVariable Long fillerId,
             @Parameter(description = "Asset tipi (PALLET veya SEPARATOR)") @PathVariable AssetType assetType,
-            @RequestBody UpdateThresholdRequest request
+            @RequestBody UpdateThresholdRequest request,
+            HttpServletRequest httpRequest
     ) {
+        // CUSTOMER rolü ise: JWT'deki username'den User bul, fillerId path param ile eşleşiyor mu kontrol et.
+        // COMPANY_STAFF için tenant filtresi servis seviyesinde zaten uygulanıyor.
+        String token = httpRequest.getHeader("Authorization").substring(7);
+        String role = jwtUtil.extractRole(token);
+        if ("CUSTOMER".equalsIgnoreCase(role)) {
+            String username = jwtUtil.extractUsername(token);
+            Long userFillerId = userRepository.findByUsername(username)
+                    .map(u -> u.getFillerId())
+                    .orElse(null);
+            if (userFillerId == null || !userFillerId.equals(fillerId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Bu dolumcunun eşiğini güncelleme yetkiniz yok.");
+            }
+        }
         FillerStock stock = fillerStockService.updateThreshold(fillerId, assetType, request.newThreshold);
         return ResponseEntity.ok(stock);
     }

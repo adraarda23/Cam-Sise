@@ -65,22 +65,34 @@ public class FillerStockService {
     }
 
     /**
-     * Backfill: stok kaydı olmayan dolumcular için varsayılan stokları oluşturur.
-     * FillerRegistered event'inin daha önce hatalı id ile çalıştığı veya event'in hiç
-     * yayınlanmadığı durumlarda eski dolumcuların stok listesinde görünmesini sağlar.
+     * Tek seferlik backfill — stok kaydı olmayan TÜM dolumcular için varsayılan stokları oluşturur.
+     * Startup'ta {@code StockBackfillRunner} tarafından bir kez çağrılır; pagination/istek
+     * yolunda ASLA çağrılmaz (eskiden burada N+1 vardı).
+     *
+     * <p>2 toplu sorgu kullanır: (1) tüm dolumcu id'leri, (2) stoğu olan dolumcu id'leri.
+     * Fark = init edilecekler. Normal durumda fark boştur → hiç insert yok.
      */
-    public void ensureStocksForOperator(Long poolOperatorId) {
-        List<Filler> fillers = fillerRepository.findByPoolOperatorId(poolOperatorId);
-        for (Filler filler : fillers) {
-            boolean palletMissing = fillerStockRepository
-                    .findByFillerIdAndAssetType(filler.getId(), AssetType.PALLET).isEmpty();
-            boolean separatorMissing = fillerStockRepository
-                    .findByFillerIdAndAssetType(filler.getId(), AssetType.SEPARATOR).isEmpty();
-            if (palletMissing || separatorMissing) {
-                log.info("Backfilling stocks for filler: id={}, name={}", filler.getId(), filler.getName());
-                initializeStockForFiller(filler.getId());
+    public int backfillMissingStocks() {
+        List<Long> allFillerIds = fillerRepository.findAll().stream()
+                .map(Filler::getId)
+                .toList();
+        if (allFillerIds.isEmpty()) return 0;
+
+        // Tek sorguda stoğu olan dolumcular (poolOperator ayrımı gerekmez — global backfill)
+        java.util.Set<Long> fillerIdsWithStock = new java.util.HashSet<>(
+                fillerStockRepository.findAllDistinctFillerIds());
+
+        int created = 0;
+        for (Long fillerId : allFillerIds) {
+            if (!fillerIdsWithStock.contains(fillerId)) {
+                initializeStockForFiller(fillerId);
+                created++;
             }
         }
+        if (created > 0) {
+            log.info("Stock backfill tamamlandı: {} dolumcu için varsayılan stok oluşturuldu", created);
+        }
+        return created;
     }
 
     /**
@@ -228,13 +240,33 @@ public class FillerStockService {
         return fillerStockRepository.findByPoolOperatorId(poolOperatorId);
     }
 
+    /**
+     * Stoklara DOLUMCU bazında paginate edilir — yani bir sayfa = N dolumcu × 2 stok kaydı
+     * (her dolumcunun palet + ayırıcı satırı birlikte gelir). Bu sayede kart UI'da bir
+     * dolumcunun iki kaydı asla farklı sayfalara bölünmez.
+     *
+     * {@code totalElements} = bu operator için bulunan dolumcu sayısı (stok kaydı değil).
+     * {@code content} = bu sayfadaki dolumcuların tüm stok satırları.
+     */
     public PageResponse<FillerStock> findByPoolOperatorIdPaged(Long poolOperatorId, String search, int page, int size) {
-        // Lazy backfill: stoğu olmayan dolumcuları (örn. event'in fillerId hatasından
-        // önce kayıt olanlar) listede görünür hale getir.
-        ensureStocksForOperator(poolOperatorId);
-
+        // NOT: backfill burada ÇAĞRILMAZ — startup'ta StockBackfillRunner bir kez yapar.
+        // Yeni dolumcular zaten FillerRegistered event'iyle stok alır.
         String searchParam = (search == null || search.isBlank()) ? "" : search;
         var pageable = PageRequest.of(page, size, Sort.by("id").descending());
-        return PageResponse.from(fillerStockRepository.findByPoolOperatorIdFiltered(poolOperatorId, searchParam, pageable));
+
+        var fillerIdPage = fillerStockRepository
+                .findFillerIdsByPoolOperatorIdFiltered(poolOperatorId, searchParam, pageable);
+
+        List<FillerStock> stocks = fillerIdPage.getContent().isEmpty()
+                ? List.of()
+                : fillerStockRepository.findByFillerIdIn(fillerIdPage.getContent());
+
+        return new PageResponse<>(
+                stocks,
+                fillerIdPage.getTotalElements(),
+                fillerIdPage.getTotalPages(),
+                fillerIdPage.getNumber(),
+                fillerIdPage.getSize()
+        );
     }
 }

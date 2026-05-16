@@ -32,4 +32,26 @@ public interface FillerStockRepository extends JpaRepository<FillerStock, Long> 
             @Param("search") String search,
             Pageable pageable
     );
+
+    /**
+     * Pages by FILLER (not by stock record), so a single page corresponds to N fillers
+     * and each filler's PALLET + SEPARATOR rows come together. Avoids the situation
+     * where a filler's two stock rows split across pages.
+     */
+    @Query("SELECT f.id FROM Filler f WHERE f.poolOperatorId = :poolOperatorId " +
+           "AND ('' = :search OR f.name ILIKE CONCAT('%', :search, '%'))")
+    Page<Long> findFillerIdsByPoolOperatorIdFiltered(
+            @Param("poolOperatorId") Long poolOperatorId,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
+    List<FillerStock> findByFillerIdIn(List<Long> fillerIds);
+
+    /**
+     * Backfill için tek sorguda stok kaydı OLAN tüm dolumcu id'lerini döndürür.
+     * Eski N+1 (dolumcu başına 2 sorgu) yerine tek sorgu.
+     */
+    @Query("SELECT DISTINCT s.fillerId FROM FillerStock s")
+    List<Long> findAllDistinctFillerIds();
 }
