@@ -3,35 +3,30 @@ package ardaaydinkilinc.Cam_Sise.chat;
 import ardaaydinkilinc.Cam_Sise.auth.domain.Role;
 import ardaaydinkilinc.Cam_Sise.auth.domain.User;
 import ardaaydinkilinc.Cam_Sise.auth.repository.UserRepository;
-import ardaaydinkilinc.Cam_Sise.core.domain.Filler;
 import ardaaydinkilinc.Cam_Sise.core.repository.FillerRepository;
-import ardaaydinkilinc.Cam_Sise.inventory.domain.FillerStock;
-import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.inventory.repository.FillerStockRepository;
-import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
-import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
-import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionRequestService;
 import ardaaydinkilinc.Cam_Sise.settings.domain.CompanySettings;
 import ardaaydinkilinc.Cam_Sise.settings.service.CompanySettingsService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ChatService Tests")
@@ -42,7 +37,6 @@ class ChatServiceTest {
     @Mock private FillerRepository fillerRepository;
     @Mock private FillerStockRepository fillerStockRepository;
     @Mock private CollectionRequestRepository collectionRequestRepository;
-    @Mock private CollectionRequestService collectionRequestService;
     @Mock private CollectionPlanRepository collectionPlanRepository;
     @Mock private CompanySettingsService companySettingsService;
 
@@ -50,15 +44,14 @@ class ChatServiceTest {
 
     private static final Long POOL_OPERATOR_ID = 1L;
     private static final Long FILLER_ID = 5L;
-    private static final Long USER_ID = 10L;
 
     private CompanySettings settings;
 
     @BeforeEach
     void setUp() {
         service = new ChatService(geminiService, userRepository, fillerRepository,
-                fillerStockRepository, collectionRequestRepository, collectionRequestService,
-                collectionPlanRepository, companySettingsService, new ObjectMapper());
+                fillerStockRepository, collectionRequestRepository,
+                collectionPlanRepository, companySettingsService);
 
         settings = new CompanySettings(POOL_OPERATOR_ID);
         lenient().when(companySettingsService.getSettings(any())).thenReturn(settings);
@@ -66,7 +59,7 @@ class ChatServiceTest {
     }
 
     @Nested
-    @DisplayName("chat()")
+    @DisplayName("chat() — salt-okunur Q&A")
     class Chat {
 
         @Test
@@ -81,7 +74,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("kullanıcı COMPANY_STAFF ise sistem promptu 'operasyon personeli' içermeli")
+        @DisplayName("kullanıcı COMPANY_STAFF ise sistem promptu 'operasyon personeli' içermeli, ACTION_JSON içermemeli")
         void usesStaffPromptForCompanyStaff() {
             User staffUser = User.register(POOL_OPERATOR_ID, "staff01", "hashed", "Ali Veli", Role.COMPANY_STAFF, null);
             when(userRepository.findByUsernameAndActiveTrue("staff01")).thenReturn(Optional.of(staffUser));
@@ -99,7 +92,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("kullanıcı CUSTOMER ama fillerId null ise temel prompt (ACTION_JSON yok) kullanılmalı")
+        @DisplayName("kullanıcı CUSTOMER ama fillerId null ise temel prompt kullanılmalı")
         void usesBasicPromptForCustomerWithNullFillerId() {
             User customerNoFiller = User.register(POOL_OPERATOR_ID, "customer01", "hashed", "Müşteri", Role.CUSTOMER, null);
             when(userRepository.findByUsernameAndActiveTrue("customer01")).thenReturn(Optional.of(customerNoFiller));
@@ -112,7 +105,7 @@ class ChatServiceTest {
         }
 
         @Test
-        @DisplayName("kullanıcı CUSTOMER ve fillerId var ise contextual prompt dolumcu bilgisi içermeli")
+        @DisplayName("CUSTOMER + fillerId: contextual prompt dolumcu bilgisi içermeli, ACTION_JSON İÇERMEMELİ")
         void usesContextualPromptForCustomerWithFillerId() {
             User customerUser = User.register(POOL_OPERATOR_ID, "customer02", "hashed", "Müşteri", Role.CUSTOMER, FILLER_ID);
             when(userRepository.findByUsernameAndActiveTrue("customer02")).thenReturn(Optional.of(customerUser));
@@ -125,18 +118,14 @@ class ChatServiceTest {
 
             verify(geminiService).chat(eq("Stok ne kadar?"), any(), promptCaptor.capture());
             assertThat(promptCaptor.getValue())
-                    .contains("ACTION_JSON")           // müşteri promptunda eylem kuralları var
-                    .contains("Dolumcu ID: " + FILLER_ID);
+                    .doesNotContain("ACTION_JSON")          // artık LLM aksiyon yürütmez
+                    .contains("Dolumcu ID: " + FILLER_ID)
+                    .contains("Talep Oluştur");             // kullanıcı butona yönlendirilir
         }
-    }
-
-    @Nested
-    @DisplayName("parseAndExecute (ACTION_MARKER üzerinden)")
-    class ParseAndExecute {
 
         @Test
-        @DisplayName("ACTION_MARKER yoksa yanıt direkt döndürülmeli")
-        void returnsResponseDirectlyWhenNoActionMarker() {
+        @DisplayName("LLM yanıtı olduğu gibi döndürülmeli (post-process yok)")
+        void returnsLlmResponseDirectly() {
             User customerUser = User.register(POOL_OPERATOR_ID, "cu", "hashed", "Müşteri", Role.CUSTOMER, FILLER_ID);
             when(userRepository.findByUsernameAndActiveTrue("cu")).thenReturn(Optional.of(customerUser));
             when(fillerRepository.findById(FILLER_ID)).thenReturn(Optional.empty());
@@ -147,61 +136,6 @@ class ChatServiceTest {
             String result = service.chat("cu", POOL_OPERATOR_ID, "Soru?", List.of());
 
             assertThat(result).isEqualTo("Sadece bilgi mesajı.");
-            verify(collectionRequestService, never()).createManual(any(), any(), anyInt(), any(), any());
-        }
-
-        @Test
-        @DisplayName("CREATE_REQUEST action ile toplama talebi oluşturulmalı")
-        void createsCollectionRequestOnAction() {
-            User customerUser = User.register(POOL_OPERATOR_ID, "cu2", "hashed", "Müşteri", Role.CUSTOMER, FILLER_ID);
-            when(userRepository.findByUsernameAndActiveTrue("cu2")).thenReturn(Optional.of(customerUser));
-            when(fillerRepository.findById(FILLER_ID)).thenReturn(Optional.empty());
-            when(fillerStockRepository.findByFillerId(FILLER_ID)).thenReturn(List.of());
-            when(collectionRequestRepository.findByFillerIdAndAssetTypeAndStatusIn(any(), any(), any())).thenReturn(List.of());
-
-            CollectionRequest createdReq = CollectionRequest.createManual(FILLER_ID, AssetType.PALLET, 50, USER_ID);
-            when(collectionRequestService.createManual(any(), any(), anyInt(), any(), any())).thenReturn(createdReq);
-            when(geminiService.chat(any(), any(), any()))
-                    .thenReturn("Talebiniz alındı.\nACTION_JSON:{\"type\":\"CREATE_REQUEST\",\"assetType\":\"PALLET\",\"quantity\":50}");
-
-            String result = service.chat("cu2", POOL_OPERATOR_ID, "50 palet istiyorum", List.of());
-
-            verify(collectionRequestService).createManual(eq(FILLER_ID), eq(AssetType.PALLET), eq(50), any(), eq(POOL_OPERATOR_ID));
-            assertThat(result).contains("toplama talebi oluşturuldu");
-        }
-
-        @Test
-        @DisplayName("CREATE_REQUEST BusinessRuleViolationException → hata mesajı döndürmeli")
-        void returnsErrorMessageOnBusinessRuleViolation() {
-            User customerUser = User.register(POOL_OPERATOR_ID, "cu3", "hashed", "Müşteri", Role.CUSTOMER, FILLER_ID);
-            when(userRepository.findByUsernameAndActiveTrue("cu3")).thenReturn(Optional.of(customerUser));
-            when(fillerRepository.findById(FILLER_ID)).thenReturn(Optional.empty());
-            when(fillerStockRepository.findByFillerId(FILLER_ID)).thenReturn(List.of());
-            when(collectionRequestRepository.findByFillerIdAndAssetTypeAndStatusIn(any(), any(), any())).thenReturn(List.of());
-
-            when(collectionRequestService.createManual(any(), any(), anyInt(), any(), any()))
-                    .thenThrow(new ardaaydinkilinc.Cam_Sise.shared.exception.BusinessRuleViolationException("Stok yetersiz"));
-            when(geminiService.chat(any(), any(), any()))
-                    .thenReturn("ACTION_JSON:{\"type\":\"CREATE_REQUEST\",\"assetType\":\"PALLET\",\"quantity\":50}");
-
-            String result = service.chat("cu3", POOL_OPERATOR_ID, "50 palet", List.of());
-
-            assertThat(result).contains("oluşturulamadı");
-        }
-
-        @Test
-        @DisplayName("geçersiz JSON içeren ACTION_MARKER loglanmalı ve exception fırlatılmamalı")
-        void handlesInvalidActionJsonGracefully() {
-            User customerUser = User.register(POOL_OPERATOR_ID, "cu4", "hashed", "Müşteri", Role.CUSTOMER, FILLER_ID);
-            when(userRepository.findByUsernameAndActiveTrue("cu4")).thenReturn(Optional.of(customerUser));
-            when(fillerRepository.findById(FILLER_ID)).thenReturn(Optional.empty());
-            when(fillerStockRepository.findByFillerId(FILLER_ID)).thenReturn(List.of());
-            when(collectionRequestRepository.findByFillerIdAndAssetTypeAndStatusIn(any(), any(), any())).thenReturn(List.of());
-            when(geminiService.chat(any(), any(), any()))
-                    .thenReturn("ACTION_JSON:geçersiz_json_bu");
-
-            assertThatCode(() -> service.chat("cu4", POOL_OPERATOR_ID, "soru", List.of()))
-                    .doesNotThrowAnyException();
         }
     }
 

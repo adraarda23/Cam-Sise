@@ -14,18 +14,14 @@ import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
-import ardaaydinkilinc.Cam_Sise.logistics.service.CollectionRequestService;
 import ardaaydinkilinc.Cam_Sise.settings.domain.CompanySettings;
 import ardaaydinkilinc.Cam_Sise.settings.service.CompanySettingsService;
-import ardaaydinkilinc.Cam_Sise.shared.exception.BusinessRuleViolationException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -34,23 +30,26 @@ import java.util.Optional;
 @Transactional
 public class ChatService {
 
-    private static final String ACTION_MARKER = "ACTION_JSON:";
-
     private final GeminiService geminiService;
     private final UserRepository userRepository;
     private final FillerRepository fillerRepository;
     private final FillerStockRepository fillerStockRepository;
     private final CollectionRequestRepository collectionRequestRepository;
-    private final CollectionRequestService collectionRequestService;
     private final CollectionPlanRepository collectionPlanRepository;
     private final CompanySettingsService companySettingsService;
-    private final ObjectMapper objectMapper;
 
     public String chat(String username, Long poolOperatorId, String message, List<ChatRequest.MessagePair> history) {
         User user = userRepository.findByUsernameAndActiveTrue(username).orElse(null);
 
         if (user != null && user.getRole() == Role.COMPANY_STAFF) {
             String systemPrompt = buildStaffSystemPrompt(poolOperatorId);
+            // Entity-grounding: mesajda bir dolumcu adı geçiyorsa o dolumcunun
+            // gerçek stok + aktif talep verisini prompt'a enjekte et ki
+            // "Coca-Cola stok durumu" gibi sorular cevaplanabilsin.
+            String fillerContext = resolveFillerContext(poolOperatorId, message);
+            if (!fillerContext.isBlank()) {
+                systemPrompt = systemPrompt + "\n\n" + fillerContext;
+            }
             return geminiService.chat(message, history, systemPrompt);
         }
 
@@ -67,67 +66,10 @@ public class ChatService {
         List<CollectionRequest> activeSepRequests = collectionRequestRepository.findByFillerIdAndAssetTypeAndStatusIn(
                 fillerId, AssetType.SEPARATOR, List.of(RequestStatus.PENDING, RequestStatus.APPROVED, RequestStatus.SCHEDULED));
 
+        // Salt-okunur Q&A. Talep oluşturma gibi aksiyonlar chat'teki deterministik
+        // hızlı-aksiyon butonlarıyla yapılır — LLM asla aksiyon yürütmez.
         String systemPrompt = buildContextualSystemPrompt(fillerName, fillerId, stocks, settings, activeRequests, activeSepRequests);
-        String geminiResponse = geminiService.chat(message, history, systemPrompt);
-
-        return parseAndExecute(geminiResponse, fillerId, user.getId(), poolOperatorId);
-    }
-
-    private String parseAndExecute(String response, Long fillerId, Long userId, Long poolOperatorId) {
-        if (!response.contains(ACTION_MARKER)) {
-            return response;
-        }
-
-        // Extract explanation text (everything before the first ACTION_JSON)
-        String explanationText = response.substring(0, response.indexOf(ACTION_MARKER)).trim();
-        StringBuilder results = new StringBuilder();
-        if (!explanationText.isBlank()) {
-            results.append(explanationText).append("\n\n");
-        }
-
-        // Find and execute ALL ACTION_JSON entries
-        int searchFrom = 0;
-        boolean anyAction = false;
-        while (response.indexOf(ACTION_MARKER, searchFrom) != -1) {
-            int markerPos = response.indexOf(ACTION_MARKER, searchFrom);
-            int jsonStart = response.indexOf("{", markerPos + ACTION_MARKER.length());
-            int jsonEnd = response.indexOf("}", jsonStart) + 1;
-            if (jsonStart == -1 || jsonEnd == 0) break;
-
-            String json = response.substring(jsonStart, jsonEnd).trim();
-            searchFrom = jsonEnd;
-            anyAction = true;
-
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> action = objectMapper.readValue(json, Map.class);
-                String type = (String) action.get("type");
-
-                if ("CREATE_REQUEST".equals(type)) {
-                    String assetTypeStr = (String) action.get("assetType");
-                    int quantity = ((Number) action.get("quantity")).intValue();
-                    AssetType assetType = AssetType.valueOf(assetTypeStr);
-                    String typeLabel = assetType == AssetType.PALLET ? "palet" : "ayırıcı";
-
-                    try {
-                        CollectionRequest created = collectionRequestService.createManual(
-                                fillerId, assetType, quantity, userId, poolOperatorId);
-                        results.append("✅ ").append(quantity).append(" adet ").append(typeLabel)
-                               .append(" için toplama talebi oluşturuldu. Talep numaranız: #").append(created.getId()).append("\n");
-                    } catch (BusinessRuleViolationException e) {
-                        results.append("❌ ").append(quantity).append(" adet ").append(typeLabel)
-                               .append(" talebi oluşturulamadı: ").append(e.getMessage()).append("\n");
-                    } catch (Exception e) {
-                        log.error("Failed to create collection request from chat", e);
-                        results.append("❌ ").append(typeLabel).append(" talebi oluşturulurken hata oluştu.\n");
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Could not parse action JSON: {}", json, e);
-            }
-        }
-
-        return anyAction ? results.toString().trim() : response.replaceAll("ACTION_JSON:\\{[^}]*}", "").trim();
+        return geminiService.chat(message, history, systemPrompt);
     }
 
     private String buildContextualSystemPrompt(
@@ -161,9 +103,9 @@ public class ChatService {
         }
 
         return """
-                Sen Cam-Sise Palet Yönetim Sistemi'nin müşteri hizmetleri asistanısın.
+                Sen Cam-Sise Palet Yönetim Sistemi'nin müşteri (dolumcu) asistanısın.
                 Bu sistem dolumculara ait palet ve ayırıcıları toplayan bir havuz operatörü firmasına aittir.
-                Türkçe yanıt ver. Kısa ve net ol.
+                Türkçe yanıt ver. Kısa, net ve yardımsever ol.
 
                 KULLANICI: %s (Dolumcu ID: %d)
 
@@ -178,16 +120,23 @@ public class ChatService {
                 AKTİF TALEPLER:
                 %s
 
-                EYLEM KURALLARI:
-                Kullanıcı toplama talebi oluşturmak istediğinde şu kontrolleri yap:
-                1. Miktar minimumun altındaysa reddet ve neden açıkla.
-                2. Miktar kullanılabilir stoktan fazlaysa reddet ve neden açıkla.
-                3. Her iki koşul da sağlanıyorsa yanıtının SONUNA şu formatı ekle (açıklamadan sonra yeni satırda):
-                   ACTION_JSON:{"type":"CREATE_REQUEST","assetType":"PALLET","quantity":50}
-                   (PALLET yerine SEPARATOR da olabilir, quantity gerçek miktar)
-                4. Birden fazla talep varsa (örn. hem palet hem ayırıcı) her biri için ayrı ACTION_JSON satırı ekle, hepsi işlenir:
+                SİSTEM HAKKINDA (kullanıcıya nasıl yapılacağını anlatabilirsin):
+                - Toplama talebi oluşturma: Sohbet penceresindeki "📦 Talep Oluştur" butonu ile
+                  veya "Taleplerim" sayfasından yapılır. Sen sohbet üzerinden talep OLUŞTURAMAZSIN;
+                  kullanıcıyı bu butona yönlendir.
+                - Stok ve eşik: "Panel" (dashboard) ekranında görünür; eşiği müşteri kendisi
+                  "Eşik Güncelle" ile değiştirebilir. Stok eşiğin altına düşünce sistem otomatik
+                  talep oluşturur.
+                - Yaklaşan toplamalar: Panel'deki "Size Yaklaşan Toplamalar" kartında plan tarihi
+                  ve gelecek araç bilgisi görünür.
+                - Talep durumları: PENDING (onay bekliyor), APPROVED (onaylandı),
+                  SCHEDULED (planlandı), COMPLETED (toplandı), REJECTED (reddedildi).
 
-                Kullanıcı talep durumu, stok bilgisi gibi sorular sorarsa yukarıdaki verileri kullanarak yanıtla, ACTION_JSON ekleme.
+                KURALLAR:
+                - Yukarıdaki gerçek verileri kullanarak soruları yanıtla.
+                - Talep oluşturma isteğinde: kullanıcıyı "📦 Talep Oluştur" butonuna yönlendir,
+                  istersen minimum/kullanılabilir miktara göre tavsiye ver, ama işlemi sen yapma.
+                - Bilmediğin/veride olmayan şeyi uydurma; "Bu bilgi panelde mevcut" gibi yönlendir.
                 """.formatted(
                 fillerName, fillerId,
                 palletCurrent, palletThreshold, palletInActive, availablePallet,
@@ -247,6 +196,104 @@ public class ChatService {
                 sepCurrent, sepCurrent - sepInActive,
                 settings.getMinPalletRequestQty(), settings.getMinSeparatorRequestQty()
         );
+    }
+
+    /**
+     * Entity-grounding: staff mesajında geçen dolumcu adını çözüp o dolumcunun
+     * gerçek stok + aktif talep verisini bir prompt bloğu olarak döndürür.
+     * Eşleşme yoksa boş string. İsim/mesaj normalize edilir ("Coca-Cola" ↔ "coca cola").
+     */
+    private String resolveFillerContext(Long poolOperatorId, String message) {
+        if (message == null || message.isBlank()) return "";
+        java.util.Set<String> msgTokens = new java.util.HashSet<>(
+                java.util.Arrays.asList(normalizeForMatch(message).split(" ")));
+        msgTokens.remove("");
+
+        List<Filler> fillers = fillerRepository.findByPoolOperatorId(poolOperatorId);
+        Filler matched = null;
+        int bestScore = 0;
+        for (Filler f : fillers) {
+            if (f.getName() == null || f.getName().isBlank()) continue;
+
+            // Dolumcunun ayırt edici kelimeleri (generic/dolgu kelimeler atılır)
+            List<String> nameTokens = significantTokens(f.getName());
+            if (nameTokens.isEmpty()) continue;
+
+            // Tüm ayırt edici kelimeler mesajda geçiyorsa eşleşir (sırasız).
+            boolean allPresent = nameTokens.stream().allMatch(msgTokens::contains);
+            if (allPresent) {
+                // En çok kelime eşleşen / en spesifik isim kazanır
+                int score = nameTokens.size();
+                if (score > bestScore) {
+                    matched = f;
+                    bestScore = score;
+                }
+            }
+        }
+        if (matched == null) return "";
+
+        Long fid = matched.getId();
+        List<FillerStock> stocks = fillerStockRepository.findByFillerId(fid);
+        Optional<FillerStock> pallet = stocks.stream().filter(s -> s.getAssetType() == AssetType.PALLET).findFirst();
+        Optional<FillerStock> sep = stocks.stream().filter(s -> s.getAssetType() == AssetType.SEPARATOR).findFirst();
+
+        List<CollectionRequest> activeReqs = collectionRequestRepository.findByFillerIdAndAssetTypeAndStatusIn(
+                fid, AssetType.PALLET, List.of(RequestStatus.PENDING, RequestStatus.APPROVED, RequestStatus.SCHEDULED));
+        List<CollectionRequest> activeSep = collectionRequestRepository.findByFillerIdAndAssetTypeAndStatusIn(
+                fid, AssetType.SEPARATOR, List.of(RequestStatus.PENDING, RequestStatus.APPROVED, RequestStatus.SCHEDULED));
+
+        StringBuilder reqStr = new StringBuilder();
+        if (activeReqs.isEmpty() && activeSep.isEmpty()) {
+            reqStr.append("Aktif talep yok.");
+        } else {
+            activeReqs.forEach(r -> reqStr.append("- Palet talebi #").append(r.getId())
+                    .append(": ").append(r.getEstimatedQuantity()).append(" adet, ").append(r.getStatus()).append("\n"));
+            activeSep.forEach(r -> reqStr.append("- Ayırıcı talebi #").append(r.getId())
+                    .append(": ").append(r.getEstimatedQuantity()).append(" adet, ").append(r.getStatus()).append("\n"));
+        }
+
+        return """
+                SORULAN DOLUMCU: %s (ID: %d)
+                - Palet stok: %d adet (eşik: %d)
+                - Ayırıcı stok: %d adet (eşik: %d)
+                Aktif talepleri:
+                %s
+
+                Kullanıcı bu dolumcu hakkında soru sorduysa YUKARIDAKİ gerçek verileri
+                kullanarak yanıtla. "Stoklar sayfasına gidin" gibi yönlendirme YAPMA.
+                """.formatted(
+                matched.getName(), fid,
+                pallet.map(FillerStock::getCurrentQuantity).orElse(0),
+                pallet.map(FillerStock::getThresholdQuantity).orElse(0),
+                sep.map(FillerStock::getCurrentQuantity).orElse(0),
+                sep.map(FillerStock::getThresholdQuantity).orElse(0),
+                reqStr.toString().trim()
+        );
+    }
+
+    /** Eşleştirme için: küçük harf + harf/rakam dışını tek boşluğa indirge. */
+    private String normalizeForMatch(String s) {
+        return s.toLowerCase(java.util.Locale.forLanguageTag("tr"))
+                .replaceAll("[^\\p{L}\\p{N}]+", " ")
+                .trim();
+    }
+
+    // Şirket türü / dolgu kelimeleri — eşleştirmede ayırt edici sayılmaz.
+    private static final java.util.Set<String> GENERIC_TOKENS = java.util.Set.of(
+            "dolumcu", "a", "as", "aş", "ş", "ltd", "şti", "sti", "san", "tic",
+            "sanayi", "ticaret", "anonim", "limited", "şirketi", "sirketi", "ve");
+
+    /** Dolumcu adının ayırt edici kelimeleri (generic ve tek-harf token'lar atılır). */
+    private List<String> significantTokens(String name) {
+        List<String> out = new java.util.ArrayList<>();
+        for (String t : normalizeForMatch(name).split(" ")) {
+            if (t.isBlank()) continue;
+            boolean numeric = t.chars().allMatch(Character::isDigit);
+            if (numeric || (t.length() >= 2 && !GENERIC_TOKENS.contains(t))) {
+                out.add(t);
+            }
+        }
+        return out;
     }
 
     private String buildStaffWelcomeMessage(String fullName, Long poolOperatorId) {
@@ -310,8 +357,20 @@ public class ChatService {
                 - Toplam stok: %d palet, %d ayırıcı
                 - Eşik aşan dolumcu: %d / %d
 
-                Personel sistemi yönetir, sorgular sorar ama chat üzerinden talep oluşturmaz.
-                Stok, talep durumu, plan bilgileri gibi sorularda yukarıdaki verileri kullan.
+                SİSTEM HAKKINDA (personeli nereye yönlendireceğini bil):
+                - Talepleri onaylama/reddetme: "Talepler" sayfası (sol menü → Operasyon).
+                - Rota optimizasyonu: "Rota Optimizasyonu" sayfası — onaylı talepler için
+                  CVRP ile filo önerisi + rota oluşturur (Clarke-Wright + 2-opt + OSRM yol mesafesi).
+                - Oluşan planlar/harita: "Toplama Planları" — her planın rota haritası,
+                  gidiş/dönüş polyline'ı, araç atama.
+                - Stok/eşik: "Stoklar" sayfası; anomali tespiti z-score ile yapılır,
+                  kritik durumda staff'a e-posta + uygulama içi bildirim gider.
+                - Dolumcu/araç/müşteri yönetimi: ilgili sol menü sayfaları.
+
+                KURALLAR:
+                - Personel sistemi yönetir; sen chat üzerinden talep/plan OLUŞTURMAZSIN,
+                  yalnızca bilgi verir ve doğru sayfaya yönlendirirsin.
+                - Yukarıdaki gerçek verileri kullan; veride olmayanı uydurma.
                 """.formatted(pending, approved, scheduled, completed,
                 activePlans, completedPlans,
                 totalPalletStock, totalSepStock,
