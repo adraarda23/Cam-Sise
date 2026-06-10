@@ -184,6 +184,38 @@ public class VehicleService {
     }
 
     /**
+     * Delete a vehicle that was created by mistake.
+     *
+     * <p>Vehicles are intentionally not editable — correcting a wrong entry
+     * means deleting and re-registering. Deletion is only allowed when:
+     * <ul>
+     *   <li>the vehicle is AVAILABLE (not assigned to any active plan), and</li>
+     *   <li>it has no collection-plan history (the DB enforces this via the
+     *       collection_plans.assigned_vehicle_id FK; a vehicle that has worked
+     *       routes should be set INACTIVE instead so history stays intact).</li>
+     * </ul>
+     */
+    public void deleteVehicle(Long vehicleId) {
+        log.info("Deleting vehicle: vehicleId={}", vehicleId);
+
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
+
+        if (vehicle.getStatus() != VehicleStatus.AVAILABLE) {
+            throw new IllegalStateException(
+                    "Only AVAILABLE vehicles can be deleted. Current status: " + vehicle.getStatus());
+        }
+
+        if (!collectionPlanRepository.findByAssignedVehicleId(vehicleId).isEmpty()) {
+            throw new IllegalStateException(
+                    "Vehicle has collection plan history and cannot be deleted. Set it INACTIVE instead.");
+        }
+
+        vehicleRepository.delete(vehicle);
+        log.info("Vehicle deleted: vehicleId={}, plateNumber={}", vehicleId, vehicle.getPlateNumber());
+    }
+
+    /**
      * Find vehicle by ID.
      */
     @Transactional(readOnly = true)

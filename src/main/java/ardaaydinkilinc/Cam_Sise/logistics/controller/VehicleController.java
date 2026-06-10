@@ -134,6 +134,27 @@ public class VehicleController {
     }
 
     /**
+     * Delete a wrongly created vehicle.
+     * Vehicles are not editable by design; a bad entry is removed and re-added.
+     */
+    @Operation(
+            summary = "Araç sil",
+            description = "Yanlış oluşturulmuş bir aracı siler. Araçlar düzenlenemez; hatalı kayıt silinip yeniden eklenir. " +
+                    "Sadece MÜSAİT (AVAILABLE) durumdaki ve plan geçmişi olmayan araçlar silinebilir."
+    )
+    @ApiResponse(responseCode = "204", description = "Araç başarıyla silindi")
+    @ApiResponse(responseCode = "404", description = "Araç bulunamadı")
+    @ApiResponse(responseCode = "409", description = "Araç müsait değil veya plan geçmişi var")
+    @DeleteMapping("/{vehicleId}")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<Void> deleteVehicle(
+            @Parameter(description = "Araç ID") @PathVariable Long vehicleId
+    ) {
+        vehicleService.deleteVehicle(vehicleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Get vehicle by ID
      */
     @Operation(
