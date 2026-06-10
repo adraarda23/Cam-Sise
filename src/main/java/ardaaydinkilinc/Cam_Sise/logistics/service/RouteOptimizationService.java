@@ -6,12 +6,15 @@ import ardaaydinkilinc.Cam_Sise.inventory.domain.vo.AssetType;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionRequest;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.Depot;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.Vehicle;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.VehicleType;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.Capacity;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.RequestStatus;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.DepotRepository;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.VehicleRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.VehicleTypeRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.service.routing.OsrmDistanceProvider;
 import ardaaydinkilinc.Cam_Sise.logistics.service.routing.RouteSegment;
@@ -28,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +56,7 @@ public class RouteOptimizationService {
     private final DepotRepository depotRepository;
     private final FillerRepository fillerRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
+    private final VehicleRepository vehicleRepository;
     private final ObjectMapper objectMapper;
 
     @Autowired(required = false)
@@ -405,6 +410,127 @@ public class RouteOptimizationService {
 
         return buildMultiVehiclePlans(depotId, depot, approvedRequests, nodes, vehicleType, plannedDate, vehiclesToUse);
     }
+
+    /**
+     * Generate collection plans for a user-selected fleet composition and
+     * immediately assign real vehicles to them.
+     *
+     * <p>Unlike {@link #generateMultiVehiclePlan}, the vehicle types and counts
+     * come from a fleet-suggestion card the operator picked, so the resulting
+     * plans are returned in ASSIGNED state (vehicles reserved, status ON_ROUTE)
+     * instead of GENERATED.
+     *
+     * <p>Available vehicles are reserved up front — if any type in the
+     * composition has fewer AVAILABLE vehicles than requested the whole
+     * operation fails before any plan is created. Routes are matched to
+     * vehicles largest-load-to-largest-capacity; a route that doesn't fit its
+     * vehicle aborts the transaction.
+     *
+     * @param depotId     Depot to start from
+     * @param plannedDate Date for collection
+     * @param fleetCounts Requested vehicle count per VehicleType id
+     * @return Plans in ASSIGNED state, one per vehicle actually used
+     */
+    public List<CollectionPlan> generatePlanWithFleet(
+            Long depotId,
+            LocalDate plannedDate,
+            Map<Long, Integer> fleetCounts
+    ) {
+        log.info("Generating plan with selected fleet: depotId={}, date={}, fleet={}",
+                depotId, plannedDate, fleetCounts);
+
+        Depot depot = depotRepository.findById(depotId)
+                .orElseThrow(() -> new IllegalArgumentException("Depot not found: " + depotId));
+
+        Map<Long, VehicleType> activeTypes = vehicleTypeRepository
+                .findByPoolOperatorIdAndActive(depot.getPoolOperatorId(), true)
+                .stream()
+                .collect(Collectors.toMap(VehicleType::getId, t -> t));
+
+        // Reserve concrete AVAILABLE vehicles per type before optimizing,
+        // preferring vehicles stationed at the plan's depot.
+        List<Vehicle> availableVehicles = vehicleRepository.findByStatus(VehicleStatus.AVAILABLE);
+        List<ReservedVehicle> reserved = new ArrayList<>();
+        for (Map.Entry<Long, Integer> entry : fleetCounts.entrySet()) {
+            int count = entry.getValue() == null ? 0 : entry.getValue();
+            if (count <= 0) continue;
+
+            VehicleType type = activeTypes.get(entry.getKey());
+            if (type == null) {
+                throw new IllegalArgumentException("Vehicle type not found or inactive: " + entry.getKey());
+            }
+
+            List<Vehicle> candidates = availableVehicles.stream()
+                    .filter(v -> type.getId().equals(v.getVehicleTypeId()))
+                    .sorted(Comparator.comparing((Vehicle v) -> !depotId.equals(v.getDepotId())))
+                    .toList();
+            if (candidates.size() < count) {
+                throw new IllegalStateException(String.format(
+                        "Not enough available vehicles of type '%s': requested %d, available %d",
+                        type.getName(), count, candidates.size()));
+            }
+            candidates.subList(0, count).forEach(v -> reserved.add(new ReservedVehicle(v, type)));
+        }
+        if (reserved.isEmpty()) {
+            throw new IllegalArgumentException("Fleet composition is empty");
+        }
+
+        List<CollectionRequest> approvedRequests = collectionRequestRepository
+                .findByStatus(RequestStatus.APPROVED);
+        if (approvedRequests.isEmpty()) {
+            throw new IllegalStateException("No approved collection requests found");
+        }
+
+        List<CVRPOptimizer.CollectionNode> nodes = convertRequestsToNodes(approvedRequests);
+
+        // The CVRP optimizer works with a single capacity, so plan routes with
+        // the largest type in the composition and verify per-vehicle fit below.
+        reserved.sort(Comparator.comparingInt((ReservedVehicle r) -> capacityScore(r.type())).reversed());
+        VehicleType largestType = reserved.get(0).type();
+
+        List<CollectionPlan> plans = buildMultiVehiclePlans(
+                depotId, depot, approvedRequests, nodes, largestType, plannedDate, reserved.size());
+
+        if (plans.size() > reserved.size()) {
+            throw new IllegalStateException(String.format(
+                    "Optimization produced %d routes but the selected fleet has only %d vehicles. " +
+                            "Pick a composition with more capacity.",
+                    plans.size(), reserved.size()));
+        }
+
+        // Match heaviest route to biggest vehicle, then assign — plans flip to
+        // ASSIGNED and vehicles to ON_ROUTE.
+        List<CollectionPlan> sortedPlans = new ArrayList<>(plans);
+        sortedPlans.sort(Comparator.comparingInt(
+                (CollectionPlan p) -> p.getTotalCapacityPallets() + p.getTotalCapacitySeparators()).reversed());
+
+        List<CollectionPlan> assigned = new ArrayList<>();
+        for (int i = 0; i < sortedPlans.size(); i++) {
+            CollectionPlan plan = sortedPlans.get(i);
+            ReservedVehicle rv = reserved.get(i);
+            Capacity cap = rv.type().getCapacity();
+            if (plan.getTotalCapacityPallets() > cap.pallets()
+                    || plan.getTotalCapacitySeparators() > cap.separators()) {
+                throw new IllegalStateException(String.format(
+                        "Route load (%d pallets / %d separators) exceeds capacity of vehicle %s (%s). " +
+                                "Pick a composition with larger vehicles.",
+                        plan.getTotalCapacityPallets(), plan.getTotalCapacitySeparators(),
+                        rv.vehicle().getPlateNumber(), rv.type().getName()));
+            }
+            assigned.add(collectionPlanService.assignVehicle(plan.getId(), rv.vehicle().getId()));
+            log.info("Auto-assigned vehicle {} ({}) to plan {}",
+                    rv.vehicle().getPlateNumber(), rv.type().getName(), plan.getId());
+        }
+
+        log.info("✅ Fleet-based optimization completed: {} plans created and assigned", assigned.size());
+        return assigned;
+    }
+
+    private int capacityScore(VehicleType type) {
+        return type.getCapacity().pallets() + type.getCapacity().separators();
+    }
+
+    private record ReservedVehicle(Vehicle vehicle, VehicleType type) {}
 
     /**
      * Internal: run Clarke-Wright optimization and persist one CollectionPlan per route.

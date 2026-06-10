@@ -23,7 +23,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * REST API for route optimization.
@@ -177,6 +179,67 @@ public class RouteOptimizationController {
 
             @Schema(description = "Maksimum kullanılacak araç sayısı (varsayılan: 10)", example = "5")
             Integer maxVehicles
+    ) {}
+
+    /**
+     * Generate optimized routes using a fleet composition the user selected
+     * from the suggestion cards. Vehicles are auto-assigned, so plans come
+     * back in ASSIGNED state instead of GENERATED.
+     */
+    @Operation(
+            summary = "Seçilen filo kompozisyonu ile optimize rota oluştur",
+            description = "Filo önerisi kartından seçilen kompozisyon (araç tipi + adet) ile rotaları optimize eder ve " +
+                    "müsait araçları otomatik atar. Planlar GENERATED yerine doğrudan ASSIGNED (Araç Atandı) durumunda döner."
+    )
+    @ApiResponse(responseCode = "201", description = "Rota planları oluşturuldu ve araçlar atandı")
+    @ApiResponse(responseCode = "400", description = "Yetersiz müsait araç, geçersiz kompozisyon veya optimizasyon başarısız")
+    @PostMapping("/with-fleet")
+    @PreAuthorize("hasRole('COMPANY_STAFF')")
+    public ResponseEntity<MultiVehicleOptimizeResponse> generatePlanWithFleet(
+            @RequestBody OptimizeWithFleetRequest request
+    ) {
+        Map<Long, Integer> fleetCounts = new LinkedHashMap<>();
+        if (request.assignments != null) {
+            request.assignments.forEach(a -> fleetCounts.merge(a.vehicleTypeId(), a.count(), Integer::sum));
+        }
+
+        List<CollectionPlan> plans = routeOptimizationService.generatePlanWithFleet(
+                request.depotId,
+                request.plannedDate != null ? request.plannedDate : LocalDate.now().plusDays(1),
+                fleetCounts
+        );
+
+        double totalDistance = plans.stream()
+                .mapToDouble(p -> p.getTotalDistance().kilometers())
+                .sum();
+        int totalPallets = plans.stream().mapToInt(CollectionPlan::getTotalCapacityPallets).sum();
+        int totalSeparators = plans.stream().mapToInt(CollectionPlan::getTotalCapacitySeparators).sum();
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                new MultiVehicleOptimizeResponse(plans, plans.size(), totalDistance, totalPallets, totalSeparators)
+        );
+    }
+
+    @Schema(description = "Seçilen filo kompozisyonu ile rota optimizasyonu request DTO")
+    public record OptimizeWithFleetRequest(
+            @Schema(description = "Depo ID", example = "1", required = true)
+            Long depotId,
+
+            @Schema(description = "Planlanan toplama tarihi (varsayılan: yarın)", example = "2026-06-15")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate plannedDate,
+
+            @Schema(description = "Seçilen kompozisyondaki araç tipi ve adetleri", required = true)
+            List<FleetTypeCount> assignments
+    ) {}
+
+    @Schema(description = "Araç tipi + adet çifti")
+    public record FleetTypeCount(
+            @Schema(description = "Araç tipi ID", example = "2", required = true)
+            Long vehicleTypeId,
+
+            @Schema(description = "Bu tipten kaç araç kullanılacak", example = "3", required = true)
+            int count
     ) {}
 
     @Operation(

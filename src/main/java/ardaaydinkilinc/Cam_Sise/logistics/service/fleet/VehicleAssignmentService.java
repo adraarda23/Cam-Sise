@@ -66,7 +66,7 @@ public class VehicleAssignmentService {
             return Collections.emptyList();
         }
 
-        Map<Long, Integer> available = countAvailableByType(poolOperatorId);
+        Map<Long, Integer> available = countAvailableByType(activeTypes);
         return suggestForTypes(activeTypes, totalDemand, estimatedRouteKm, available);
     }
 
@@ -322,14 +322,19 @@ public class VehicleAssignmentService {
 
     /**
      * Count of currently-available vehicles per VehicleType, scoped to the
-     * tenant. Vehicles in AVAILABLE status only — others are busy.
+     * tenant's active types. Vehicles in AVAILABLE status only — others are busy.
+     *
+     * <p>Every given type gets an explicit entry (0 when none of its vehicles
+     * are available). Without the explicit zero, a type whose vehicles are all
+     * busy would be missing from the map and the
+     * <code>getOrDefault(id, MAX_VALUE)</code> lookups in the strategy methods
+     * would treat it as unlimited — recommending vehicles that don't exist.
      */
-    private Map<Long, Integer> countAvailableByType(Long poolOperatorId) {
-        List<Vehicle> all = vehicleRepository.findAll();
+    private Map<Long, Integer> countAvailableByType(List<VehicleType> types) {
         Map<Long, Integer> result = new HashMap<>();
-        for (Vehicle v : all) {
-            if (v.getStatus() != VehicleStatus.AVAILABLE) continue;
-            result.merge(v.getVehicleTypeId(), 1, Integer::sum);
+        types.forEach(t -> result.put(t.getId(), 0));
+        for (Vehicle v : vehicleRepository.findByStatus(VehicleStatus.AVAILABLE)) {
+            result.computeIfPresent(v.getVehicleTypeId(), (id, count) -> count + 1);
         }
         return result;
     }
