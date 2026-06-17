@@ -3,7 +3,7 @@
 Cam şişe dolum sektöründe kullanılan **yeniden kullanılabilir palet ve separatörlerin** geri toplama sürecini yöneten, envanter takibi ve rota optimizasyonu sunan bir backend + panel uygulaması.
 
 > Bursa Teknik Üniversitesi — Bilgisayar Mühendisliği Bitirme Tezi  
-> Desteksiz (anonim şirket) proje — Cartonplast iş modeli referans alınmıştır.
+> Desteksiz (anonim şirket) proje — sektördeki palet/separatör havuz (pooling) iş modeli referans alınmıştır.
 
 
 ---
@@ -47,6 +47,7 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 │  │          │  │           │  │  Request  │  │         │                  │
 │  │          │  │           │  │Collection │  │         │                  │
 │  │          │  │           │  │   Plan    │  │         │                  │
+│  │          │  │           │  │CVRP/OSRM  │  │         │                  │
 │  └────┬─────┘  └─────┬─────┘  └─────┬─────┘  └────┬────┘                  │
 │       │              │              │             │                        │
 │       └──────────────┴──────────────┴─────────────┘                        │
@@ -54,17 +55,21 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 │                          Domain Events Bus                                 │
 │                                    │                                       │
 │                        ┌───────────▼──────────┐                            │
-│                        │    Event Sourcing    │                            │
-│                        │   (Audit Logging)    │                            │
+│                        │  Domain Event Store  │                            │
+│                        │  (Denetim Günlüğü)   │                            │
 │                        └──────────────────────┘                            │
 │                                                                             │
 │  ┌──────────────┐  ┌───────────────────────┐  ┌──────────────────────┐    │
 │  │  Analytics   │  │       Chat Module     │  │   Settings Module    │    │
 │  │   Module     │  │                       │  │                      │    │
-│  │              │  │  ChatService          │  │  CompanySettings     │    │
+│  │ + Anomaly    │  │  ChatService          │  │  CompanySettings     │    │
 │  │AnalyticsSvc  │  │  GeminiService        │  │  (min. talep mikt.)  │    │
-│  │AnalyticsSumm │  │  (Google Gemini AI)   │  │                      │    │
+│  │ (z-score)    │  │  (Google Gemini AI)   │  │                      │    │
 │  └──────────────┘  └───────────────────────┘  └──────────────────────┘    │
+│                                                                             │
+│  ┌─────────────────────────────────────┐                                   │
+│  │       Notification Module           │   in-app + e-posta (SMTP)         │
+│  └─────────────────────────────────────┘                                   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                          Shared Kernel                              │   │
@@ -85,13 +90,14 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 | Modül | Sorumluluk |
 |---|---|
 | `core` | Tenant (PoolOperator) ve dolumcu (Filler) yönetimi |
-| `inventory` | Asset stok takibi, zaiyat hesabı, eşik kontrolü |
-| `logistics` | Araç, depo, talep ve rota planlama (CVRP) |
+| `inventory` | Asset stok takibi, zaiyat hesabı/tahmini, eşik kontrolü |
+| `logistics` | Araç, depo, talep ve rota planlama (CVRP, OSRM gerçek yol + cache, filo önerisi) |
 | `auth` | JWT kimlik doğrulama, rol yönetimi |
-| `analytics` | Özet dashboard — talep, plan ve stok istatistikleri |
+| `analytics` | Özet dashboard (talep/plan/stok istatistikleri) + anomali tespiti (z-score) |
 | `chat` | Google Gemini tabanlı AI asistan (CUSTOMER + COMPANY_STAFF) |
 | `settings` | Operatör bazlı iş kuralı konfigürasyonu |
-| `shared` | DDD altyapısı, event bus, paylaşılan VO'lar, exception handling |
+| `notification` | Uygulama içi + e-posta (SMTP) bildirim |
+| `shared` | DDD altyapısı, event bus, denetim günlüğü, paylaşılan VO'lar, exception handling |
 
 **Katman organizasyonu:**
 - `controller/` — REST Controllers (Presentation Layer)
@@ -102,7 +108,7 @@ Sistemin odağı döngünün **son bacağıdır**: dolumculardaki birikmiş asse
 **Tasarım prensibi:** Domain-Driven Design (DDD)
 - **Tactical Patterns:** Aggregate Root, Entity, Value Object, Domain Event, Repository
 - **Strategic Patterns:** Bounded Context, Ubiquitous Language, Modular structure
-**Event Yönetimi:** Domain Events + Event Sourcing (Audit Logging)
+**Event Yönetimi:** Domain Events + Elasticsearch tabanlı denetim günlüğü (audit log). *Not: klasik event sourcing değildir; aggregate durumu ilişkisel veritabanında tutulur.*
 **Multi-Tenancy:** Pool Operator (Tenant) bazlı izolasyon
 
 ---
@@ -181,8 +187,8 @@ Aggregate'ler, Value Object'ler, Domain Event'ler, API endpoint'leri ve daha faz
 | Yardımcı Kütüphaneler | Lombok, Jackson |
 | Test | JUnit 5 + Mockito + AssertJ + JaCoCo |
 | Test DB | H2 (in-memory) |
-| Frontend | TBD |
-| Harita | Leaflet + OpenStreetMap (TBD) |
+| Frontend | React 19 + TypeScript (`cam-sise-frontend-ts`) — React Query, Hook Form + Zod, Recharts, Tailwind, react-hot-toast, axios |
+| Harita | Leaflet / react-leaflet + OSRM polyline |
 
 ---
 
