@@ -33,6 +33,7 @@ public class DistanceProviderConfig {
             @Qualifier("haversineDistanceProvider") DistanceProvider haversine,
             @Qualifier("osrmDistanceProvider") DistanceProvider osrm,
             DistanceCacheRepository cacheRepository,
+            DistanceCacheWriter cacheWriter,
             ObjectMapper objectMapper,
             @Value("${app.routing.distance-provider:haversine}") String preferredProvider,
             @Value("${app.routing.cache.enabled:false}") boolean cacheEnabled,
@@ -45,7 +46,7 @@ public class DistanceProviderConfig {
                 ttlDays);
 
         if (cacheEnabled) {
-            return new CachedDistanceProvider(underlying, cacheRepository, objectMapper, ttlDays);
+            return new CachedDistanceProvider(underlying, cacheRepository, cacheWriter, objectMapper, ttlDays);
         }
         return underlying;
     }

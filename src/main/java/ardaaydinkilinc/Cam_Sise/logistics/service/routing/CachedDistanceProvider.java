@@ -32,17 +32,20 @@ public class CachedDistanceProvider implements DistanceProvider {
 
     private final DistanceProvider delegate;
     private final DistanceCacheRepository cacheRepository;
+    private final DistanceCacheWriter cacheWriter;
     private final ObjectMapper objectMapper;
     private final int ttlDays;
 
     public CachedDistanceProvider(
             DistanceProvider delegate,
             DistanceCacheRepository cacheRepository,
+            DistanceCacheWriter cacheWriter,
             ObjectMapper objectMapper,
             int ttlDays
     ) {
         this.delegate = delegate;
         this.cacheRepository = cacheRepository;
+        this.cacheWriter = cacheWriter;
         this.objectMapper = objectMapper;
         this.ttlDays = ttlDays;
     }
@@ -70,7 +73,7 @@ public class CachedDistanceProvider implements DistanceProvider {
             DistanceCacheEntry entry = DistanceCacheEntry.of(
                     fromLat, fromLon, toLat, toLon,
                     fresh.distanceKm(), fresh.durationMinutes(), geomJson);
-            cacheRepository.save(entry);
+            cacheWriter.write(entry);
         } catch (JsonProcessingException e) {
             log.warn("Failed to serialize geometry for cache: {}", e.getMessage());
         } catch (Exception e) {

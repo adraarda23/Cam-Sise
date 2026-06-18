@@ -190,7 +190,8 @@ public class CollectionRequest extends AggregateRoot<Long> {
 
         this.status = RequestStatus.COMPLETED;
         this.updatedAt = LocalDateTime.now();
-        addDomainEvent(new CollectionRequestCompleted(this.id, this.fillerId, LocalDateTime.now()));
+        addDomainEvent(new CollectionRequestCompleted(
+                this.id, this.fillerId, this.assetType, this.estimatedQuantity, LocalDateTime.now()));
     }
 
     public void updateQuantity(Integer newQuantity) {

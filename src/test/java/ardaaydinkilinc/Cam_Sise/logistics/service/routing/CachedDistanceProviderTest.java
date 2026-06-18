@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -27,12 +28,13 @@ class CachedDistanceProviderTest {
 
     @Mock private DistanceProvider delegate;
     @Mock private DistanceCacheRepository repo;
+    @Mock private DistanceCacheWriter cacheWriter;
 
     private CachedDistanceProvider provider;
 
     @BeforeEach
     void setUp() {
-        provider = new CachedDistanceProvider(delegate, repo, new ObjectMapper(), 30);
+        provider = new CachedDistanceProvider(delegate, repo, cacheWriter, new ObjectMapper(), 30);
     }
 
     @Test
@@ -49,7 +51,7 @@ class CachedDistanceProviderTest {
 
         assertThat(result.distanceKm()).isEqualTo(35.4);
         verify(delegate, times(1)).route(from, to);
-        verify(repo, times(1)).save(any(DistanceCacheEntry.class));
+        verify(cacheWriter, times(1)).write(any(DistanceCacheEntry.class));
     }
 
     @Test
@@ -115,7 +117,7 @@ class CachedDistanceProviderTest {
         when(repo.findByFromLatAndFromLonAndToLatAndToLon(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(Optional.empty());
         when(delegate.route(from, to)).thenReturn(RouteSegment.of(35.4, 42.5));
-        when(repo.save(any())).thenThrow(new RuntimeException("DB down"));
+        doThrow(new RuntimeException("DB down")).when(cacheWriter).write(any());
 
         RouteSegment result = provider.route(from, to);
 

@@ -126,8 +126,10 @@ public class LogisticsEventHandler {
                 event.actualPalletsCollected(),
                 event.actualSeparatorsCollected());
 
-        // TODO: Update stock levels at fillers (deduct collected amounts)
-        // TODO: Mark collection requests as completed
+        // Not: Stok düşümü, plan tamamlanınca her CollectionRequest için yayımlanan
+        // CollectionRequestCompleted olayı üzerinden InventoryEventHandler tarafından yapılır.
+        // CollectionRequest'lerin COMPLETED işaretlenmesi de CollectionPlanService.completeCollection
+        // içinde gerçekleştirilir.
         // TODO: Update analytics/reporting
         // TODO: Generate completion report
     }
