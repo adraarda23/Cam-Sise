@@ -85,16 +85,21 @@ public class FillerStockController {
     ) {
         // CUSTOMER rolü ise: JWT'deki username'den User bul, fillerId path param ile eşleşiyor mu kontrol et.
         // COMPANY_STAFF için tenant filtresi servis seviyesinde zaten uygulanıyor.
-        String token = httpRequest.getHeader("Authorization").substring(7);
-        String role = jwtUtil.extractRole(token);
-        if ("CUSTOMER".equalsIgnoreCase(role)) {
-            String username = jwtUtil.extractUsername(token);
-            Long userFillerId = userRepository.findByUsername(username)
-                    .map(u -> u.getFillerId())
-                    .orElse(null);
-            if (userFillerId == null || !userFillerId.equals(fillerId)) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "Bu dolumcunun eşiğini güncelleme yetkiniz yok.");
+        // CUSTOMER ownership kontrolü yalnızca Authorization (Bearer) header'ı varsa yapılır;
+        // header yoksa erişim zaten @PreAuthorize + JwtAuthenticationFilter ile denetlenmiştir.
+        String authHeader = httpRequest.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            String role = jwtUtil.extractRole(token);
+            if ("CUSTOMER".equalsIgnoreCase(role)) {
+                String username = jwtUtil.extractUsername(token);
+                Long userFillerId = userRepository.findByUsername(username)
+                        .map(u -> u.getFillerId())
+                        .orElse(null);
+                if (userFillerId == null || !userFillerId.equals(fillerId)) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "Bu dolumcunun eşiğini güncelleme yetkiniz yok.");
+                }
             }
         }
         FillerStock stock = fillerStockService.updateThreshold(fillerId, assetType, request.newThreshold);

@@ -2,7 +2,6 @@ package ardaaydinkilinc.Cam_Sise.core.domain;
 
 import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerActivated;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerDeactivated;
-import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerRegistered;
 import ardaaydinkilinc.Cam_Sise.core.domain.event.FillerUpdated;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Address;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.ContactInfo;
@@ -48,15 +47,13 @@ class FillerTest {
         }
 
         @Test
-        @DisplayName("FillerRegistered eventi yayınlamalı")
-        void shouldPublishFillerRegisteredEvent() {
+        @DisplayName("register() domain event eklemez; FillerRegistered kayıt sonrası FillerService tarafından yayımlanır")
+        void shouldNotAddEventAtRegister() {
             Filler filler = createFiller();
 
-            assertThat(filler.getDomainEvents()).hasSize(1);
-            assertThat(filler.getDomainEvents().get(0)).isInstanceOf(FillerRegistered.class);
-            FillerRegistered event = (FillerRegistered) filler.getDomainEvents().get(0);
-            assertThat(event.poolOperatorId()).isEqualTo(POOL_OPERATOR_ID);
-            assertThat(event.fillerName()).isEqualTo(NAME);
+            // FillerRegistered olayı, id atandıktan sonra (kalıcılaştırma sonrası) FillerService
+            // tarafından yayımlanır; bu nedenle register() aşamasında aggregate'e event eklenmez.
+            assertThat(filler.getDomainEvents()).isEmpty();
         }
 
         @Test
