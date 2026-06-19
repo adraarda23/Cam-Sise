@@ -393,14 +393,9 @@ public class RouteOptimizationService {
 
         List<CVRPOptimizer.CollectionNode> nodes = convertRequestsToNodes(approvedRequests);
 
-        // Ensure we use at least as many vehicles as capacity demands
-        Capacity totalDemand = nodes.stream()
-                .map(CVRPOptimizer.CollectionNode::demand)
-                .reduce(new Capacity(0, 0), Capacity::add);
-
-        int minNeeded = calculateNeededVehicles(totalDemand, vehicleType.getCapacity());
-        // Use exactly as many vehicles as capacity requires, capped at nodes.size().
-        // maxVehicles is an upper-bound hint; minNeeded always takes priority.
+        // Gerçekçi araç sayısı: aggregate tavan(toplam/kapasite) yerine per-filler
+        // bin-packing (FFD) — her talebin bölünemez olduğunu dikkate alır, gerçek rotalamaya yakın.
+        int minNeeded = binPackVehicleCount(nodes, vehicleType.getCapacity());
         int vehiclesToUse = Math.min(nodes.size(), minNeeded);
 
         if (vehiclesToUse != maxVehicles) {
@@ -409,6 +404,37 @@ public class RouteOptimizationService {
         }
 
         return buildMultiVehiclePlans(depotId, depot, approvedRequests, nodes, vehicleType, plannedDate, vehiclesToUse);
+    }
+
+    /**
+     * Per-filler first-fit-decreasing (FFD) bin-packing ile gereken araç sayısı.
+     * Aggregate tavan(toplam/kapasite) her talebin bölünemez olduğunu görmezden geldiği için
+     * az sayar; bu yöntem her dolumcunun talebini ayrı bir parça olarak ele alır.
+     */
+    private int binPackVehicleCount(List<CVRPOptimizer.CollectionNode> nodes, Capacity cap) {
+        if (nodes == null || nodes.isEmpty()) return 0;
+        List<Capacity> demands = nodes.stream()
+                .map(CVRPOptimizer.CollectionNode::demand)
+                .sorted(Comparator.comparingInt((Capacity c) -> c.pallets() + c.separators()).reversed())
+                .collect(Collectors.toList());
+        List<Capacity> bins = new ArrayList<>(); // her bin = o araçta kullanılan yük
+        for (Capacity d : demands) {
+            boolean placed = false;
+            for (int i = 0; i < bins.size(); i++) {
+                Capacity used = bins.get(i);
+                if (used.pallets() + d.pallets() <= cap.pallets()
+                        && used.separators() + d.separators() <= cap.separators()) {
+                    bins.set(i, new Capacity(used.pallets() + d.pallets(), used.separators() + d.separators()));
+                    placed = true;
+                    break;
+                }
+            }
+            if (!placed) {
+                // Tek talep tek araca bile sığmasa da bir araç sayılır (kısmen toplanır).
+                bins.add(new Capacity(Math.min(d.pallets(), cap.pallets()), Math.min(d.separators(), cap.separators())));
+            }
+        }
+        return Math.max(1, bins.size());
     }
 
     /**
@@ -483,20 +509,19 @@ public class RouteOptimizationService {
 
         List<CVRPOptimizer.CollectionNode> nodes = convertRequestsToNodes(approvedRequests);
 
-        // The CVRP optimizer works with a single capacity, so plan routes with
-        // the largest type in the composition and verify per-vehicle fit below.
-        reserved.sort(Comparator.comparingInt((ReservedVehicle r) -> capacityScore(r.type())).reversed());
-        VehicleType largestType = reserved.get(0).type();
+        // CVRP'yi filodaki EN KÜÇÜK kapasiteyle planla; böylece üretilen hiçbir rota
+        // atanacak aracın kapasitesini aşmaz (514 hatası önlenir). Araç sayısı bir HARD CAP'tir:
+        // sığmayan talepler atanamayan olarak kalır (CVRP raporlar), hata atılmaz.
+        VehicleType planningType = reserved.stream()
+                .min(Comparator.comparingInt((ReservedVehicle r) -> capacityScore(r.type())))
+                .map(ReservedVehicle::type)
+                .orElseThrow(() -> new IllegalStateException("No reserved vehicle"));
 
         List<CollectionPlan> plans = buildMultiVehiclePlans(
-                depotId, depot, approvedRequests, nodes, largestType, plannedDate, reserved.size());
+                depotId, depot, approvedRequests, nodes, planningType, plannedDate, reserved.size());
 
-        if (plans.size() > reserved.size()) {
-            throw new IllegalStateException(String.format(
-                    "Optimization produced %d routes but the selected fleet has only %d vehicles. " +
-                            "Pick a composition with more capacity.",
-                    plans.size(), reserved.size()));
-        }
+        // Atama: en ağır rotayı en büyük araca eşle.
+        reserved.sort(Comparator.comparingInt((ReservedVehicle r) -> capacityScore(r.type())).reversed());
 
         // Match heaviest route to biggest vehicle, then assign — plans flip to
         // ASSIGNED and vehicles to ON_ROUTE.

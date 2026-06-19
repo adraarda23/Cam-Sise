@@ -3,8 +3,14 @@ package ardaaydinkilinc.Cam_Sise.logistics.service;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.CollectionPlan;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.PlanStatus;
 import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.VehicleStatus;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.Vehicle;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.VehicleType;
+import ardaaydinkilinc.Cam_Sise.logistics.domain.vo.Capacity;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionPlanRepository;
 import ardaaydinkilinc.Cam_Sise.logistics.repository.CollectionRequestRepository;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.VehicleRepository;
+import ardaaydinkilinc.Cam_Sise.logistics.repository.VehicleTypeRepository;
+import ardaaydinkilinc.Cam_Sise.shared.exception.BusinessRuleViolationException;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Distance;
 import ardaaydinkilinc.Cam_Sise.shared.domain.vo.Duration;
 import ardaaydinkilinc.Cam_Sise.shared.dto.PageResponse;
@@ -32,6 +38,8 @@ public class CollectionPlanService {
     private final VehicleService vehicleService;
     private final CollectionRequestService collectionRequestService;
     private final CollectionRequestRepository collectionRequestRepository;
+    private final VehicleRepository vehicleRepository;
+    private final VehicleTypeRepository vehicleTypeRepository;
 
     /**
      * Generate a new collection plan (typically called by CVRP optimizer).
@@ -76,6 +84,22 @@ public class CollectionPlanService {
 
         CollectionPlan plan = collectionPlanRepository.findById(planId)
                 .orElseThrow(() -> new IllegalArgumentException("Collection plan not found: " + planId));
+
+        // Kapasite doğrulaması: planın yükü seçilen aracın kapasitesini aşamaz.
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new IllegalArgumentException("Vehicle not found: " + vehicleId));
+        VehicleType type = vehicleTypeRepository.findById(vehicle.getVehicleTypeId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Vehicle type not found: " + vehicle.getVehicleTypeId()));
+        Capacity cap = type.getCapacity();
+        if (plan.getTotalCapacityPallets() > cap.pallets()
+                || plan.getTotalCapacitySeparators() > cap.separators()) {
+            throw new BusinessRuleViolationException(String.format(
+                    "Araç kapasitesi yetersiz: plan yükü %d palet / %d separatör, "
+                            + "seçilen aracın kapasitesi %d palet / %d separatör.",
+                    plan.getTotalCapacityPallets(), plan.getTotalCapacitySeparators(),
+                    cap.pallets(), cap.separators()));
+        }
 
         plan.assignVehicle(vehicleId);
         plan = collectionPlanRepository.save(plan);

@@ -419,6 +419,13 @@ public class CVRPOptimizer {
             }
         }
 
+        // Hard cap: en fazla maxVehicles rota tutulur. Kapasite nedeniyle birleştirilemeyip
+        // artan rotaların talepleri atanamayan kalır (en dolu rotalar tutulur; üst katman raporlar).
+        if (maxVehicles > 0 && routes.size() > maxVehicles) {
+            routes.sort((a, b) -> Integer.compare(routeLoadScore(b), routeLoadScore(a)));
+            routes = new ArrayList<>(routes.subList(0, maxVehicles));
+        }
+
         // Step 5: Convert to RouteSolution and apply 2-opt
         // Constraint violations are logged as warnings but do NOT discard the route —
         // the caller decides whether the route is acceptable for their operation.
@@ -446,6 +453,15 @@ public class CVRPOptimizer {
         }
 
         return solutions;
+    }
+
+    /** Bir rotanın toplam yükü (palet + separatör) — hard cap'te en dolu rotaları tutmak için. */
+    private int routeLoadScore(Route route) {
+        int total = 0;
+        for (CollectionNode n : route.nodes) {
+            total += n.demand().pallets() + n.demand().separators();
+        }
+        return total;
     }
 
     /**
